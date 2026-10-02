@@ -14,6 +14,12 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.0. Creates the tag v<version> on this branch if it does not exist yet."
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -35,20 +41,47 @@ jobs:
       - name: Version from tag
         id: version
         env:
-          TAG: ${{ github.ref_name }}
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            TAG="v${INPUT_VERSION#v}"
+          else
+            TAG="$REF_NAME"
+          fi
           NAME="${TAG#v}"
           BASE="${NAME%%-*}"
           IFS=. read -r MAJOR MINOR PATCH <<< "$BASE"
           for n in "$MAJOR" "$MINOR" "$PATCH"; do
-            [[ "$n" =~ ^[0-9]+$ ]] || { echo "::error::tag must look like v1.2.3 (got $TAG)"; exit 1; }
+            [[ "$n" =~ ^[0-9]+$ ]] || { echo "::error::version must look like 1.2.3 (got $TAG)"; exit 1; }
           done
           (( MINOR < 1000 && PATCH < 1000 )) || { echo "::error::minor and patch must be below 1000"; exit 1; }
           CODE=$(( MAJOR * 1000000 + MINOR * 1000 + PATCH ))
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
-          echo "Building $NAME (versionCode $CODE)"
+          echo "Building $NAME (versionCode $CODE, tag $TAG)"
+
+      - name: Create the tag (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git fetch --quiet origin "refs/tags/$TAG:refs/tags/$TAG" 2> /dev/null; then
+            existing="$(git rev-parse "refs/tags/$TAG^{commit}")"
+            if [ "$existing" != "$GITHUB_SHA" ]; then
+              echo "::error::tag $TAG already exists at $existing, not at $GITHUB_SHA"
+              exit 1
+            fi
+            echo "Tag $TAG already points at this commit."
+          else
+            git tag "$TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$TAG"
+            echo "Created tag $TAG at $GITHUB_SHA."
+          fi
 
       - name: Restore signing keystore
         env:
@@ -100,6 +133,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: EarDigger ${{ steps.version.outputs.name }}
           generate_release_notes: true
           fail_on_unmatched_files: true
