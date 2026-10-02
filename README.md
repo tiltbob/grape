@@ -60,10 +60,25 @@ its SHA-256. The tag decides both the version name and the version code
 pre-release suffix such as `v1.2.3-rc1` is accepted but shares its version code with the
 final `v1.2.3`.
 
-One-time setup: run `scripts/make-keystore.sh` locally to create the signing key, back it
-up, and add the four repository secrets it prints (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
-`KEY_ALIAS`, `KEY_PASSWORD`). Android only installs updates signed with the same key, so
-losing the keystore means users must uninstall and reinstall.
+One-time setup, from a laptop with `gh` logged in (no Java needed, about a minute):
+
+```
+gh repo clone tiltbob/grape && cd grape
+scripts/setup-signing.sh
+```
+
+The script creates a 4096-bit RSA key and a 100-year certificate with `openssl`, writes
+them to the repository's Actions secrets (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
+`KEY_ALIAS`, `KEY_PASSWORD`) and securely wipes the local copy, so GitHub holds the only
+one. It prints the certificate fingerprint for your records. Android only installs
+updates signed with the same key, so do not delete those secrets.
+
+Sharing one key across several apps: GitHub has no account-wide Actions secrets for
+personal accounts, so pass every app repository in the same run
+(`scripts/setup-signing.sh --repo you/app1 --repo you/app2`). With an organization the
+secrets live at organization level and new repositories are granted later without
+touching the key (`--org ORG --repos app1,app2`, then `--org ORG --grant ORG/app3`).
+`--dry-run` shows what would happen without writing anything.
 
 Then:
 

@@ -2,7 +2,7 @@
 # v1.2.3 is pushed. Obtainium (https://github.com/ImranR98/Obtainium) tracks those
 # releases: add https://github.com/<owner>/grape as an app source.
 #
-# One-time setup (see scripts/make-keystore.sh):
+# One-time setup (scripts/setup-signing.sh writes these from a laptop):
 #   secrets.KEYSTORE_BASE64     the release keystore, base64 encoded
 #   secrets.KEYSTORE_PASSWORD   its store password
 #   secrets.KEY_ALIAS           the key alias inside it
@@ -60,7 +60,7 @@ jobs:
           set -euo pipefail
           for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
             if [ -z "${!v:-}" ]; then
-              echo "::error::repository secret $v is not set; run scripts/make-keystore.sh and add the secrets"
+              echo "::error::repository secret $v is not set; run scripts/setup-signing.sh from a laptop"
               exit 1
             fi
           done
