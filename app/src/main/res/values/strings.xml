@@ -35,10 +35,12 @@
     <string name="btn_open">Open</string>
 
     <string name="section_debug">Debug log</string>
-    <string name="debug_help">Everything the app does while finding and joining scopes is recorded here. Share it (for example to the Claude app) to get help; it includes nearby network names and addresses.</string>
+    <string name="debug_help">Everything the app does while finding and joining scopes is recorded here. Share it (for example to the Claude app) to get help; it includes nearby network names and addresses. Hide puts this card away until the next shake.</string>
     <string name="btn_share_log">Share log</string>
     <string name="btn_copy_log">Copy</string>
     <string name="btn_clear_log">Clear</string>
+    <string name="btn_hide_log">Hide</string>
+    <string name="debug_revealed">Debug log revealed. Shake again any time.</string>
     <string name="debug_copied">Debug log copied to the clipboard.</string>
 
     <string name="privacy_note">EarDigger only ever sends packets to the camera\'s own address on the local network. Bluetooth and Wi-Fi scanning only listen on this phone. No accounts, no analytics, no update checks, no cloud.</string>

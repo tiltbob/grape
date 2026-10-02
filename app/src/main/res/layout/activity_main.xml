@@ -120,12 +120,16 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Hidden until the phone is shaken hard three times (see ShakeDetector). -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardDebug"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
+            android:visibility="gone"
             app:cardCornerRadius="16dp"
-            app:contentPadding="16dp">
+            app:contentPadding="16dp"
+            tools:visibility="visible">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -188,6 +192,13 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
                         android:text="@string/btn_clear_log" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnHideLog"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/btn_hide_log" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

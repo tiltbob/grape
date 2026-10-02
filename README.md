@@ -47,12 +47,13 @@ The scope is its own Wi-Fi access point, so there is nothing to configure:
    With it on, the picture is shown as a circle: a disc looks the same at every angle, so
    only the scene moves, not the frame.
 
-**If a scope is not found:** the connect screen ends with a **Debug log** card that records
-every step of pairing and discovery (permissions, Bluetooth and Wi-Fi hits, the network
-Android handed over, every probe sent and reply received). **Share log** opens the system
-share sheet, so the report can go straight to the Claude app or anywhere else; **Copy**
-puts it on the clipboard. It contains nearby network names and local addresses, nothing
-else personal.
+**If a scope is not found:** shake the phone hard three times on the connect screen (a
+"rage shake") to reveal the **Debug log** card. It records every step of pairing and
+discovery (permissions, Bluetooth and Wi-Fi hits, the network Android handed over, every
+probe sent and reply received). **Share log** opens the system share sheet, so the report
+can go straight to the Claude app or anywhere else; **Copy** puts it on the clipboard;
+**Hide** puts the card away again. It contains nearby network names and local addresses,
+nothing else personal.
 
 Every socket the app opens is pinned to the scope's network, because that network has no
 internet and Android would otherwise route the traffic over mobile data.

@@ -45,6 +45,9 @@ class MainActivity : AppCompatActivity() {
     private val nearbyAdapter = NearbyListAdapter(::connectAndOpen, ::confirmForget)
     private var findJob: Job? = null
 
+    /** Three hard shakes reveal the debug card; it is out of the way otherwise. */
+    private val shakeDetector = ShakeDetector(this) { revealDebug() }
+
     /** True between asking Android to join a scope's Wi-Fi and opening the viewer. */
     private var pendingJoin = false
     private var pendingSsid: String? = null
@@ -88,6 +91,10 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.debug_copied, Toast.LENGTH_SHORT).show()
         }
         binding.btnClearLog.setOnClickListener { DebugLog.clear() }
+        binding.btnHideLog.setOnClickListener {
+            DebugLog.log("Main", "tap: Hide debug")
+            binding.cardDebug.isVisible = false
+        }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -101,7 +108,11 @@ class MainActivity : AppCompatActivity() {
                         binding.tvNearbyNotes.text = notes.joinToString("\n")
                     }
                 }
-                launch { DebugLog.version.collect { binding.tvDebugTail.text = DebugLog.tail(DEBUG_TAIL_LINES) } }
+                launch {
+                    DebugLog.version.collect {
+                        if (binding.cardDebug.isVisible) binding.tvDebugTail.text = DebugLog.tail(DEBUG_TAIL_LINES)
+                    }
+                }
             }
         }
     }
@@ -117,9 +128,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        shakeDetector.start()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        shakeDetector.stop()
+    }
+
     override fun onStop() {
         super.onStop()
         scanner.stop()
+    }
+
+    private fun revealDebug() {
+        if (binding.cardDebug.isVisible) return
+        DebugLog.log("Main", "rage shake: debug card revealed")
+        binding.tvDebugTail.text = DebugLog.tail(DEBUG_TAIL_LINES)
+        binding.cardDebug.isVisible = true
+        Toast.makeText(this, R.string.debug_revealed, Toast.LENGTH_SHORT).show()
+        binding.cardDebug.post { binding.root.smoothScrollTo(0, binding.cardDebug.top) }
     }
 
     // ---- nearby scopes --------------------------------------------------------
