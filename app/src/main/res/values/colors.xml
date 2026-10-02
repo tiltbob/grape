@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="grape_primary">#6A1B9A</color>
+    <color name="grape_on_primary">#FFFFFF</color>
+    <color name="grape_primary_container">#E1BEE7</color>
+    <color name="grape_on_primary_container">#2A0A3D</color>
+    <color name="grape_secondary">#4A6B2A</color>
+    <color name="grape_on_secondary">#FFFFFF</color>
+    <color name="grape_background">#FBF7FC</color>
+    <color name="grape_on_background">#1D1B1E</color>
+    <color name="grape_surface">#FFFFFF</color>
+    <color name="grape_on_surface">#1D1B1E</color>
+    <color name="viewer_background">#000000</color>
+    <color name="overlay_scrim">#99000000</color>
+    <color name="overlay_text">#FFFFFF</color>
+    <color name="launcher_background">#4A148C</color>
+</resources>

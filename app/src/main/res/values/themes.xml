@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Grape" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/grape_primary</item>
+        <item name="colorOnPrimary">@color/grape_on_primary</item>
+        <item name="colorPrimaryContainer">@color/grape_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/grape_on_primary_container</item>
+        <item name="colorSecondary">@color/grape_secondary</item>
+        <item name="colorOnSecondary">@color/grape_on_secondary</item>
+        <item name="android:colorBackground">@color/grape_background</item>
+        <item name="colorOnBackground">@color/grape_on_background</item>
+        <item name="colorSurface">@color/grape_surface</item>
+        <item name="colorOnSurface">@color/grape_on_surface</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">?attr/isLightTheme</item>
+    </style>
+
+    <style name="Theme.Grape.Viewer">
+        <item name="android:windowBackground">@color/viewer_background</item>
+        <item name="android:statusBarColor">@color/viewer_background</item>
+        <item name="android:navigationBarColor">@color/viewer_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Grape</string>
+    <string name="tagline">Local-only viewer for Bebird Wi-Fi scopes</string>
+
+    <string name="section_network">1. Join the camera\'s Wi-Fi</string>
+    <string name="network_help">Power the scope on and connect this phone to its Wi-Fi network (usually named bebird-… or like Model-1234). Then link the app to that network.</string>
+    <string name="btn_wifi_settings">Wi-Fi settings</string>
+    <string name="btn_use_current_wifi">Link current Wi-Fi</string>
+    <string name="btn_connect_prefix">Pick camera Wi-Fi</string>
+    <string name="hint_ssid_prefix">Wi-Fi name starts with</string>
+    <string name="network_none">Not linked to a Wi-Fi network yet.</string>
+    <string name="network_requesting">Waiting for Wi-Fi…</string>
+    <string name="network_unavailable">No matching Wi-Fi network was found.</string>
+    <string name="network_lost">The Wi-Fi link was lost.</string>
+    <string name="network_linked">Linked to Wi-Fi: %1$s</string>
+
+    <string name="section_cameras">2. Find the camera</string>
+    <string name="btn_scan">Scan</string>
+    <string name="scan_idle">Tap Scan to look for cameras on the linked network.</string>
+    <string name="scan_running">Looking for cameras…</string>
+    <string name="scan_none">No camera answered. Make sure the scope is on and the phone is on its Wi-Fi, then try again.</string>
+    <string name="scan_found">Found %1$d camera(s). Tap one to view.</string>
+    <string name="protocol_tube">UDP 58080/58090</string>
+    <string name="protocol_ml">UDP 192.168.10.123</string>
+
+    <string name="section_manual">Or enter the camera address</string>
+    <string name="hint_host">Camera IP, e.g. 192.168.5.1</string>
+    <string name="btn_open">Open</string>
+    <string name="error_bad_host">That does not look like an IPv4 address.</string>
+
+    <string name="privacy_note">Grape only ever sends packets to the camera\'s own address on the local network. No accounts, no analytics, no update checks, no cloud.</string>
+
+    <string name="viewer_connecting">Connecting to %1$s…</string>
+    <string name="viewer_waiting">Waiting for video…</string>
+    <string name="viewer_error">Could not connect: %1$s</string>
+    <string name="viewer_battery">Battery %1$d%%</string>
+    <string name="viewer_battery_charging">Battery %1$d%% ⚡</string>
+    <string name="viewer_battery_unknown">Battery —</string>
+    <string name="viewer_fps">%1$d fps</string>
+    <string name="viewer_light">Light</string>
+    <string name="btn_snapshot">Snapshot</string>
+    <string name="btn_rotation_auto">Auto-rotate: on</string>
+    <string name="btn_rotation_off">Auto-rotate: off</string>
+    <string name="snapshot_saved">Saved %1$s</string>
+    <string name="snapshot_failed">Could not save snapshot</string>
+    <string name="snapshot_no_frame">No frame yet</string>
+</resources>
