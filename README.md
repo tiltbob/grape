@@ -44,6 +44,8 @@ The scope is its own Wi-Fi access point, so there is nothing to configure:
    scope to forget it. The list lives in the app's private storage and never leaves the phone.
 4. In the viewer: the slider sets the tip light, **Snapshot** writes a JPEG to
    `Pictures/EarDigger`, and **Auto-rotate** toggles compensation of the scope's roll angle.
+   With it on, the picture is shown as a circle: a disc looks the same at every angle, so
+   only the scene moves, not the frame.
 
 **If a scope is not found:** the connect screen ends with a **Debug log** card that records
 every step of pairing and discovery (permissions, Bluetooth and Wi-Fi hits, the network

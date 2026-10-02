@@ -78,9 +78,12 @@ class ViewerActivity : AppCompatActivity() {
                 lifecycleScope.launch { runCatching { client?.setLight(level) } }
             }
         })
+        // A circle is the one shape that does not seem to turn when the picture is kept upright.
+        binding.cameraView.circular = autoRotate
         binding.btnRotation.setOnClickListener {
             autoRotate = !autoRotate
             binding.btnRotation.setText(if (autoRotate) R.string.btn_rotation_auto else R.string.btn_rotation_off)
+            binding.cameraView.circular = autoRotate
             if (!autoRotate) shownAngle = 0f
         }
         binding.btnSnapshot.setOnClickListener { snapshot() }
