@@ -26,9 +26,11 @@
         android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="tiramisu" />
-    <!-- Older Android versions gate Bluetooth and Wi-Fi scanning behind location. -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="32" />
+    <!-- Android hands out Wi-Fi scan results (the scope's SSID) only to apps holding fine
+         location, on every version; without it getScanResults() is silently empty. The app
+         never reads the phone's location. Bluetooth scanning needs it only before Android 12. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <uses-feature android:name="android.hardware.wifi" android:required="true" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

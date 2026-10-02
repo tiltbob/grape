@@ -88,7 +88,7 @@ object TubeDiscovery {
                     partial.remove(packet.address)
                     val text = bytes.toString(Charsets.UTF_8)
                     val info = parseBoardInfo(host, text)
-                    DebugLog.log(TAG, "probe: board info from $host parsed=${info != null}: ${text.take(300)}")
+                    DebugLog.log(TAG, "probe: board info from $host parsed=${info != null}: $text")
                     info?.let { found[host] = it }
                 }
             }
@@ -117,7 +117,7 @@ object TubeDiscovery {
                 soTimeout = 200
             }
         } catch (e: IOException) {
-            DebugLog.log(TAG, "beacon: could not bind port ${TubeProtocol.BEACON_PORT}", e)
+            DebugLog.log(TAG, "beacon: could not bind port ${TubeProtocol.BEACON_PORT} (another app, likely the vendor's, holds it; the probe does not need it)", e)
             return@withContext emptyList()
         }
         DebugLog.log(TAG, "beacon: listening on port ${TubeProtocol.BEACON_PORT}")

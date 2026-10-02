@@ -24,7 +24,7 @@
     <string name="security_open">open</string>
     <string name="security_wpa2">WPA2</string>
     <string name="security_wpa3">WPA3</string>
-    <string name="permission_needed">Nearby scanning needs the permissions Android just asked for.</string>
+    <string name="permission_needed">Nearby scanning needs the permissions Android just asked for. Location is only so Android will list Wi-Fi networks; the app never reads where you are.</string>
 
     <string name="btn_open">Open</string>
 
@@ -40,6 +40,7 @@
     <string name="viewer_connecting">Connecting to %1$s…</string>
     <string name="viewer_waiting">Waiting for video…</string>
     <string name="viewer_error">Could not connect: %1$s</string>
+    <string name="viewer_link_lost">Lost the scope\'s Wi-Fi. Is it still switched on?</string>
     <string name="viewer_battery">Battery %1$d%%</string>
     <string name="viewer_battery_charging">Battery %1$d%% ⚡</string>
     <string name="viewer_battery_unknown">Battery —</string>

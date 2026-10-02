@@ -57,6 +57,7 @@ class TubeCameraClient(
 
     @Volatile private var lastFrameAtMs = 0L
     @Volatile private var lastStartAtMs = 0L
+    private var lastBatteryState = -1
 
     private val _frames = MutableSharedFlow<VideoFrame>(
         replay = 0,
@@ -163,6 +164,10 @@ class TubeCameraClient(
             return null
         }
         val b = TubeProtocol.parseBattery(reply, reply.size) ?: return null
+        if (b.state != lastBatteryState) {
+            DebugLog.log("TubeClient", "battery: state ${b.state} (${b.percent}%)")
+            lastBatteryState = b.state
+        }
         return BatteryStatus(
             percent = b.percent.coerceIn(0, 100),
             charging = b.charging || b.full,
@@ -228,8 +233,12 @@ class TubeCameraClient(
      * picture has stalled for a few seconds, bounce the stream the way the vendor app does.
      */
     private suspend fun keepAliveLoop(video: DatagramSocket) {
+        var ticks = 0
         while (scope.isActive) {
             readBattery()?.let { _battery.value = it }
+            if (++ticks % STATS_EVERY_TICKS == 0) {
+                DebugLog.log("TubeClient", "stats: frames ${assembler.framesCompleted}, dropped ${assembler.framesDropped}")
+            }
             val now = System.currentTimeMillis()
             val stalledSince = if (lastFrameAtMs > 0) lastFrameAtMs else lastStartAtMs
             if (now - stalledSince > STALL_RESTART_MS && now - lastStartAtMs > STALL_RESTART_MS) {
@@ -312,5 +321,6 @@ class TubeCameraClient(
         const val VIDEO_TIMEOUT_MS = 100
         const val KEEP_ALIVE_INTERVAL_MS = 1000L
         const val STALL_RESTART_MS = 3000L
+        const val STATS_EVERY_TICKS = 15
     }
 }

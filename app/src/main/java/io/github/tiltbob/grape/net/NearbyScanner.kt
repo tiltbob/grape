@@ -58,18 +58,19 @@ class NearbyScanner(private val context: Context) {
     private var wifiReceiver: BroadcastReceiver? = null
     private val stopRunnable = Runnable { stop() }
 
-    /** Permissions this device needs before [start] can use both radios. */
+    /**
+     * Permissions this device needs before [start] can use both radios. Wi-Fi scan results
+     * are gated behind fine location on every Android version (NEARBY_WIFI_DEVICES alone
+     * gets an empty list), so location is always on the list.
+     */
     fun requiredPermissions(): List<String> = buildList {
+        add(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_SCAN)
+            add(Manifest.permission.BLUETOOTH_CONNECT)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.NEARBY_WIFI_DEVICES)
-            add(Manifest.permission.BLUETOOTH_SCAN)
-            add(Manifest.permission.BLUETOOTH_CONNECT)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            add(Manifest.permission.BLUETOOTH_SCAN)
-            add(Manifest.permission.BLUETOOTH_CONNECT)
-            add(Manifest.permission.ACCESS_FINE_LOCATION)
-        } else {
-            add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
 
@@ -208,14 +209,11 @@ class NearbyScanner(private val context: Context) {
             DebugLog.log(TAG, "wifi: no WifiManager")
             return
         }
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.NEARBY_WIFI_DEVICES
-        } else {
-            Manifest.permission.ACCESS_FINE_LOCATION
-        }
-        if (!granted(permission)) {
-            notes += "Wi-Fi scan permission not granted"
-            DebugLog.log(TAG, "wifi: $permission not granted")
+        // Scan results need fine location on every version; the system returns an empty
+        // list (no exception) without it, or when location services are switched off.
+        if (!granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            notes += "Location permission not granted (Android needs it to list Wi-Fi networks)"
+            DebugLog.log(TAG, "wifi: ACCESS_FINE_LOCATION not granted")
             return
         }
         if (!wm.isWifiEnabled) {
@@ -223,8 +221,9 @@ class NearbyScanner(private val context: Context) {
             DebugLog.log(TAG, "wifi: disabled")
             return
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && !locationServicesOn()) {
+        if (!locationServicesOn()) {
             notes += "Location services are off (Android needs them for Wi-Fi scanning)"
+            DebugLog.log(TAG, "wifi: location services off")
             return
         }
         val receiver = object : BroadcastReceiver() {

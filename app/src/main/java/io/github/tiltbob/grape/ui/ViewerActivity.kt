@@ -21,6 +21,7 @@ import io.github.tiltbob.grape.camera.DeviceInfoJson
 import io.github.tiltbob.grape.camera.VideoFrame
 import io.github.tiltbob.grape.databinding.ActivityViewerBinding
 import io.github.tiltbob.grape.debug.DebugLog
+import io.github.tiltbob.grape.net.NetworkLink
 import io.github.tiltbob.grape.protocol.ml.MlCameraClient
 import io.github.tiltbob.grape.protocol.ml.MlDiscovery
 import io.github.tiltbob.grape.protocol.tube.TubeCameraClient
@@ -150,7 +151,19 @@ class ViewerActivity : AppCompatActivity() {
             }
             launch { c.battery.collect { renderBattery(it) } }
             launch { watchStall() }
+            launch { watchLink(link) }
             launch(Dispatchers.Default) { decodeLoop(c) }
+        }
+    }
+
+    /** The scope's Wi-Fi going away (it was switched off, or walked out of range) ends the session. */
+    private suspend fun watchLink(link: NetworkLink) {
+        link.status.collect { status ->
+            if (status == NetworkLink.Status.LOST || status == NetworkLink.Status.NONE) {
+                DebugLog.log("Viewer", "scope Wi-Fi $status: closing the viewer")
+                Toast.makeText(this, R.string.viewer_link_lost, Toast.LENGTH_LONG).show()
+                finish()
+            }
         }
     }
 

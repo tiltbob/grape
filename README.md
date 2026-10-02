@@ -29,8 +29,9 @@ against hardware from this environment; reports and packet captures are welcome.
 The scope is its own Wi-Fi access point, so there is nothing to configure:
 
 1. Switch the scope on and open EarDigger. It listens for the scope over Bluetooth LE and in
-   the Wi-Fi scan results (Android asks once for the nearby-devices / location permissions
-   this needs; nothing leaves the phone) and lists what it hears.
+   the Wi-Fi scan results and lists what it hears. Android asks once for the Bluetooth,
+   nearby-devices and location permissions: location only because Android hands out Wi-Fi
+   scan results to apps that hold it. The app never reads your position; nothing leaves the phone.
 2. Tap the scope. The app joins its Wi-Fi itself (on Android 10+ the connection is private to
    the app and Android remembers your one-time approval, so the next time it is automatic),
    finds the camera on that network and opens the live view. A scope you used before is
