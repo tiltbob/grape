@@ -31,8 +31,7 @@ import java.net.InetAddress
  * bound to this network through [binder]. Ways to obtain it:
  *  - [connectTo]: join a specific scope found by [NearbyScanner] (what the vendor app's
  *    auto-connect does); on Android 10+ the connection exists only for this app;
- *  - [requestWifiBySsidPrefix]: Android 10+ picker limited to networks with a name prefix;
- *  - [requestWifi]: whatever Wi-Fi the user already joined from system settings.
+ *  - [requestWifiBySsidPrefix]: Android 10+ picker limited to networks with a name prefix.
  */
 class NetworkLink(context: Context) {
 
@@ -58,12 +57,6 @@ class NetworkLink(context: Context) {
 
     /** Network id of a legacy (pre-Android 10) configuration we added, to clean up later. */
     private var legacyNetworkId = -1
-
-    fun requestWifi() {
-        targetSsid = null
-        DebugLog.log(TAG, "requestWifi(): any Wi-Fi network without internet")
-        request(null)
-    }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     fun requestWifiBySsidPrefix(prefix: String) {

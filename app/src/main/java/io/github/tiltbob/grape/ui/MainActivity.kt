@@ -1,11 +1,10 @@
 package io.github.tiltbob.grape.ui
 
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -26,10 +25,12 @@ import io.github.tiltbob.grape.net.NearbyCamera
 import io.github.tiltbob.grape.net.NearbyScanner
 import io.github.tiltbob.grape.net.NetworkLink
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
+/**
+ * The scope is always its own Wi-Fi access point, so the only flow is: hear it over
+ * Bluetooth / Wi-Fi, join its network, find the camera on that network, open the viewer.
+ */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -38,12 +39,11 @@ class MainActivity : AppCompatActivity() {
     private val scanner: NearbyScanner get() = app.scanner
 
     private val nearbyAdapter = NearbyListAdapter(::connectAndOpen)
-    private val cameraAdapter = CameraListAdapter(::openCamera)
+    private var findJob: Job? = null
 
-    private var scanJob: Job? = null
-
-    /** The scope we are joining; once the link is up we look for it and open the viewer. */
-    private var pendingCamera: NearbyCamera? = null
+    /** True between asking Android to join a scope's Wi-Fi and opening the viewer. */
+    private var pendingJoin = false
+    private var pendingSsid: String? = null
 
     /** Only rejoin the remembered scope by itself once per launch, so leaving the viewer
      *  does not bounce straight back into it. */
@@ -64,35 +64,16 @@ class MainActivity : AppCompatActivity() {
 
         binding.rvNearby.layoutManager = LinearLayoutManager(this)
         binding.rvNearby.adapter = nearbyAdapter
-        binding.rvCameras.layoutManager = LinearLayoutManager(this)
-        binding.rvCameras.adapter = cameraAdapter
         nearbyAdapter.lastUsedSsid = app.lastCameraSsid
 
         binding.btnFindNearby.setOnClickListener {
             autoJoinDone = false
             findNearby()
         }
-        binding.btnWifiSettings.setOnClickListener { openWifiSettings() }
-        binding.btnUseCurrentWifi.setOnClickListener {
-            pendingCamera = null
-            link.requestWifi()
-        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            binding.btnConnectPrefix.setOnClickListener {
-                val prefix = binding.etSsidPrefix.text?.toString()?.trim().orEmpty()
-                if (prefix.isEmpty()) {
-                    binding.etSsidPrefix.error = getString(R.string.hint_ssid_prefix)
-                } else {
-                    pendingCamera = null
-                    link.requestWifiBySsidPrefix(prefix)
-                }
-            }
+            binding.btnPickWifi.setOnClickListener { joinByPicker() }
         } else {
-            binding.rowPrefix.isVisible = false
-        }
-        binding.btnScan.setOnClickListener {
-            DebugLog.log("Main", "tap: Scan")
-            scanNetwork(openFirst = false)
+            binding.btnPickWifi.isVisible = false
         }
         binding.btnShareLog.setOnClickListener {
             DebugLog.log("Main", "tap: Share log")
@@ -101,7 +82,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnCopyLog.setOnClickListener {
             DebugReport.copy(this, link)
-            android.widget.Toast.makeText(this, R.string.debug_copied, android.widget.Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.debug_copied, Toast.LENGTH_SHORT).show()
         }
         binding.btnClearLog.setOnClickListener { DebugLog.clear() }
 
@@ -123,11 +104,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        DebugLog.log("Main", "onStart: link=${link.status.value} permissions=${hasAllScanPermissions()}")
-        // Attach to whatever Wi-Fi the phone is on, so a plain Scan has a network to use.
-        if (link.status.value == NetworkLink.Status.NONE) link.requestWifi()
+        DebugLog.log("Main", "onStart: link=${link.status.value} permissions=${hasAllScanPermissions()} pendingJoin=$pendingJoin")
         // Listen right away when we already may; never prompt without a tap.
-        if (hasAllScanPermissions() && !scanner.scanning.value && link.status.value != NetworkLink.Status.AVAILABLE) {
+        if (hasAllScanPermissions() && !scanner.scanning.value && !pendingJoin &&
+            link.status.value != NetworkLink.Status.AVAILABLE
+        ) {
             startNearbyScan()
         }
     }
@@ -152,15 +133,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startNearbyScan() {
-        val prefix = binding.etSsidPrefix.text?.toString()?.trim().orEmpty()
-        scanner.namePrefixes = (listOf(prefix) + CameraWifi.DEFAULT_NAME_PREFIXES).filter { it.isNotBlank() }.distinct()
+        scanner.namePrefixes = CameraWifi.DEFAULT_NAME_PREFIXES
         scanner.start()
     }
 
     private fun onScanningChanged(scanning: Boolean) {
-        binding.progressNearby.isVisible = scanning
-        binding.btnFindNearby.isEnabled = !scanning
-        if (pendingCamera != null) return
+        binding.progressNearby.isVisible = scanning || pendingJoin
+        binding.btnFindNearby.isEnabled = !scanning && !pendingJoin
+        if (pendingJoin) return
         val n = scanner.cameras.value.size
         binding.tvNearbyStatus.text = when {
             scanning -> getString(R.string.nearby_scanning)
@@ -171,12 +151,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun onNearby(list: List<NearbyCamera>) {
         nearbyAdapter.submit(list)
-        if (pendingCamera == null) {
-            if (list.isNotEmpty()) binding.tvNearbyStatus.text = getString(R.string.nearby_found, list.size)
+        if (!pendingJoin && list.isNotEmpty()) {
+            binding.tvNearbyStatus.text = getString(R.string.nearby_found, list.size)
         }
         // The scope we used last time is switched on again: rejoin it without a tap.
         val last = app.lastCameraSsid ?: return
-        if (autoJoinDone || pendingCamera != null || link.status.value == NetworkLink.Status.AVAILABLE) return
+        if (autoJoinDone || pendingJoin || link.status.value == NetworkLink.Status.AVAILABLE) return
         val match = list.firstOrNull { it.ssid.equals(last, ignoreCase = true) } ?: return
         autoJoinDone = true
         connectAndOpen(match)
@@ -185,70 +165,54 @@ class MainActivity : AppCompatActivity() {
     /** Join the scope's Wi-Fi; [onLinkStatus] continues once Android reports the network. */
     private fun connectAndOpen(camera: NearbyCamera) {
         scanner.stop()
-        pendingCamera = camera
+        pendingJoin = true
+        pendingSsid = camera.ssid
         app.lastCameraSsid = camera.ssid
         nearbyAdapter.lastUsedSsid = camera.ssid
         binding.tvNearbyStatus.text = getString(R.string.nearby_joining, camera.ssid)
         binding.progressNearby.isVisible = true
+        binding.btnFindNearby.isEnabled = false
         link.connectTo(camera)
     }
 
-    // ---- network link ---------------------------------------------------------
+    /** Fallback when the radios cannot hear the scope: let Android list matching networks. */
+    private fun joinByPicker() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        DebugLog.log("Main", "tap: Pick its Wi-Fi")
+        scanner.stop()
+        pendingJoin = true
+        pendingSsid = null
+        binding.tvNearbyStatus.text = getString(R.string.nearby_choose)
+        binding.progressNearby.isVisible = true
+        binding.btnFindNearby.isEnabled = false
+        link.requestWifiBySsidPrefix(CameraWifi.DEFAULT_NAME_PREFIXES.first())
+    }
+
+    // ---- joined network -----------------------------------------------------------
 
     private fun onLinkStatus(status: NetworkLink.Status) {
-        renderNetwork(status)
-        val pending = pendingCamera ?: return
+        if (!pendingJoin) return
+        val ssid = pendingSsid ?: link.targetSsid ?: getString(R.string.the_scope_wifi)
         when (status) {
-            NetworkLink.Status.AVAILABLE -> {
-                binding.progressNearby.isVisible = false
-                scanNetwork(openFirst = true, joinedSsid = pending.ssid)
-            }
+            NetworkLink.Status.AVAILABLE -> findCameraOnJoinedNetwork(ssid)
             NetworkLink.Status.UNAVAILABLE, NetworkLink.Status.LOST -> {
-                pendingCamera = null
-                binding.progressNearby.isVisible = false
-                binding.tvNearbyStatus.text = getString(R.string.nearby_join_failed, pending.ssid)
+                finishJoin()
+                binding.tvNearbyStatus.text = if (pendingSsid != null) {
+                    getString(R.string.nearby_join_failed, ssid)
+                } else {
+                    getString(R.string.nearby_join_failed_generic)
+                }
             }
             else -> Unit
         }
     }
 
-    private fun renderNetwork(status: NetworkLink.Status) {
-        binding.tvNetworkStatus.text = when (status) {
-            NetworkLink.Status.NONE -> getString(R.string.network_none)
-            NetworkLink.Status.REQUESTING -> getString(R.string.network_requesting)
-            NetworkLink.Status.UNAVAILABLE -> getString(R.string.network_unavailable)
-            NetworkLink.Status.LOST -> getString(R.string.network_lost)
-            NetworkLink.Status.AVAILABLE -> {
-                val me = link.localAddress() ?: "?"
-                val hosts = link.candidateHosts()
-                val name = link.targetSsid?.let { "$it, " } ?: ""
-                val suffix = if (hosts.isEmpty()) "" else "  (gateway ${hosts.joinToString()})"
-                getString(R.string.network_linked, name + me) + suffix
-            }
-        }
-    }
-
-    private fun openWifiSettings() {
-        val panel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            Intent(Settings.Panel.ACTION_WIFI)
-        } else {
-            Intent(Settings.ACTION_WIFI_SETTINGS)
-        }
-        runCatching { startActivity(panel) }
-            .onFailure { runCatching { startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) } }
-    }
-
-    // ---- cameras on the linked network ---------------------------------------
-
-    /** Look for cameras on the linked network; with [openFirst], open the first one found. */
-    private fun scanNetwork(openFirst: Boolean, joinedSsid: String? = null) {
-        scanJob?.cancel()
-        scanJob = lifecycleScope.launch {
-            binding.progressScan.isVisible = true
-            binding.btnScan.isEnabled = false
-            binding.tvScanStatus.text = getString(R.string.scan_running)
-            ensureLinked()
-            DebugLog.log("Main", "scanNetwork: link=${link.status.value} local=${link.localAddress()} candidates=${link.candidateHosts()}")
+    /** The joined network is the scope's own: ask it for the camera and open the viewer. */
+    private fun findCameraOnJoinedNetwork(ssid: String) {
+        findJob?.cancel()
+        findJob = lifecycleScope.launch {
+            binding.tvNearbyStatus.text = getString(R.string.nearby_looking, ssid)
+            DebugLog.log("Main", "joined $ssid: link=${link.status.value} local=${link.localAddress()} candidates=${link.candidateHosts()}")
             val wifi = applicationContext.getSystemService(WifiManager::class.java)
             // Without this lock many phones' Wi-Fi drivers drop broadcast datagrams such as the beacon.
             val lock = wifi?.createMulticastLock("eardigger-scan")?.apply { setReferenceCounted(false); acquire() }
@@ -260,44 +224,30 @@ class MainActivity : AppCompatActivity() {
             } finally {
                 runCatching { lock?.release() }
             }
-            cameraAdapter.submit(found)
-            binding.tvScanStatus.text = if (found.isEmpty()) {
-                getString(R.string.scan_none)
+            finishJoin()
+            val first = found.firstOrNull()
+            if (first != null) {
+                binding.tvNearbyStatus.text = getString(R.string.nearby_found, 1)
+                openCamera(first)
             } else {
-                getString(R.string.scan_found, found.size)
-            }
-            binding.progressScan.isVisible = false
-            binding.btnScan.isEnabled = true
-            if (openFirst) {
-                pendingCamera = null
-                val first = found.firstOrNull()
-                if (first != null) {
-                    binding.tvNearbyStatus.text = getString(R.string.nearby_found, 1)
-                    openCamera(first)
-                } else {
-                    binding.tvNearbyStatus.text = getString(R.string.nearby_joined_no_camera, joinedSsid ?: "")
-                }
+                binding.tvNearbyStatus.text = getString(R.string.nearby_joined_no_camera, ssid)
             }
         }
     }
 
-    /** If no Wi-Fi network is linked yet, ask Android for the current one and wait briefly. */
-    private suspend fun ensureLinked() {
-        if (link.network.value != null) return
-        if (link.status.value != NetworkLink.Status.REQUESTING) link.requestWifi()
-        val got = withTimeoutOrNull(LINK_WAIT_MS) {
-            link.status.first { it == NetworkLink.Status.AVAILABLE || it == NetworkLink.Status.UNAVAILABLE }
-        }
-        DebugLog.log("Main", "ensureLinked: ${got ?: "timed out"} (${link.describeNetwork().trim()})")
+    private fun finishJoin() {
+        pendingJoin = false
+        pendingSsid = null
+        binding.progressNearby.isVisible = scanner.scanning.value
+        binding.btnFindNearby.isEnabled = !scanner.scanning.value
     }
 
     private fun openCamera(info: DeviceInfo) {
+        DebugLog.log("Main", "open camera ${info.host} ${info.protocol}")
         startActivity(ViewerActivity.intent(this, info))
     }
 
-
     private companion object {
         const val DEBUG_TAIL_LINES = 12
-        const val LINK_WAIT_MS = 4000L
     }
 }

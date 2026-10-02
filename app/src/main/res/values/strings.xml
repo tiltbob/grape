@@ -11,8 +11,13 @@
     <string name="nearby_none">No scope found nearby. Make sure it is switched on and close by.</string>
     <string name="nearby_found">%1$d scope(s) nearby. Tap one to connect.</string>
     <string name="nearby_joining">Joining %1$s…</string>
-    <string name="nearby_join_failed">Could not join %1$s. Try again, or connect from Wi-Fi settings below.</string>
-    <string name="nearby_joined_no_camera">Joined %1$s, but no camera answered. Scan again below.</string>
+    <string name="nearby_join_failed">Could not join %1$s. Make sure the scope is switched on and try again.</string>
+    <string name="nearby_joined_no_camera">Joined %1$s, but no camera answered. Try again, then share the debug log below if it keeps happening.</string>
+    <string name="nearby_looking">Joined %1$s, looking for the camera…</string>
+    <string name="nearby_choose">Choose the scope\'s Wi-Fi in the dialog…</string>
+    <string name="nearby_join_failed_generic">Could not join the scope\'s Wi-Fi. Make sure it is switched on and try again.</string>
+    <string name="btn_pick_wifi">Can\'t see it? Pick its Wi-Fi</string>
+    <string name="the_scope_wifi">the scope\'s Wi-Fi</string>
     <string name="nearby_last_used">last used</string>
     <string name="seen_bluetooth">Bluetooth</string>
     <string name="seen_wifi">Wi-Fi</string>
@@ -20,27 +25,6 @@
     <string name="security_wpa2">WPA2</string>
     <string name="security_wpa3">WPA3</string>
     <string name="permission_needed">Nearby scanning needs the permissions Android just asked for.</string>
-
-    <string name="section_network">Or join the camera\'s Wi-Fi yourself</string>
-    <string name="network_help">Connect this phone to the scope\'s Wi-Fi (usually named bebird-…) from system settings, then link the app to that network.</string>
-    <string name="btn_wifi_settings">Wi-Fi settings</string>
-    <string name="btn_use_current_wifi">Link current Wi-Fi</string>
-    <string name="btn_connect_prefix">Pick camera Wi-Fi</string>
-    <string name="hint_ssid_prefix">Wi-Fi name starts with</string>
-    <string name="network_none">Not linked to a Wi-Fi network yet.</string>
-    <string name="network_requesting">Waiting for Wi-Fi…</string>
-    <string name="network_unavailable">No matching Wi-Fi network was found.</string>
-    <string name="network_lost">The Wi-Fi link was lost.</string>
-    <string name="network_linked">Linked to Wi-Fi: %1$s</string>
-
-    <string name="section_cameras">Cameras on the linked network</string>
-    <string name="btn_scan">Scan</string>
-    <string name="scan_idle">Tap Scan to look for cameras on the linked network.</string>
-    <string name="scan_running">Looking for cameras…</string>
-    <string name="scan_none">No camera answered. Make sure the scope is on and the phone is on its Wi-Fi, then try again.</string>
-    <string name="scan_found">Found %1$d camera(s). Tap one to view.</string>
-    <string name="protocol_tube">UDP 58080/58090</string>
-    <string name="protocol_ml">UDP 192.168.10.123</string>
 
     <string name="btn_open">Open</string>
 
