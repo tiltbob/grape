@@ -47,6 +47,11 @@ object DebugReport {
         sb.appendLine("network link: status=${link.status.value} target=${link.targetSsid} local=${link.localAddress()} candidates=${link.candidateHosts()}")
         sb.appendLine(link.describeNetwork())
         sb.appendLine()
+        CrashRecord.read(context)?.let { crash ->
+            sb.appendLine("last crash (the run before this one, or earlier):")
+            sb.appendLine(crash.trimEnd().prependIndent("  "))
+            sb.appendLine()
+        }
         sb.appendLine("remembered scopes:")
         val known = (context.applicationContext as? GrapeApp)?.known?.scopes?.value.orEmpty()
         if (known.isEmpty()) sb.appendLine("  none")

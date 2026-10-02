@@ -3,9 +3,9 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
-// The release workflow passes the version from the git tag (v1.2.3 -> 1.2.3 / 1003002).
-val grapeVersionName: String = (project.findProperty("grapeVersionName") as String?) ?: "0.3.2"
-val grapeVersionCode: Int = (project.findProperty("grapeVersionCode") as String?)?.toInt() ?: 3002
+// The release workflow passes the version from the git tag (v1.2.3 -> 1.2.3 / 1003003).
+val grapeVersionName: String = (project.findProperty("grapeVersionName") as String?) ?: "0.3.3"
+val grapeVersionCode: Int = (project.findProperty("grapeVersionCode") as String?)?.toInt() ?: 3003
 
 // Release signing comes from the environment so the keystore never lives in the repo.
 // Without these variables assembleRelease still works and produces an unsigned APK.

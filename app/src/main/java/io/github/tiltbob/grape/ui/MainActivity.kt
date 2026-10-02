@@ -45,8 +45,11 @@ class MainActivity : AppCompatActivity() {
     private val nearbyAdapter = NearbyListAdapter(::connectAndOpen, ::confirmForget)
     private var findJob: Job? = null
 
-    /** Three hard shakes reveal the debug card; it is out of the way otherwise. */
-    private val shakeDetector = ShakeDetector(this) { revealDebug() }
+    /**
+     * Three hard shakes reveal the debug card; it is out of the way otherwise. Created on
+     * first use: an Activity has no Context (so no system services) until after construction.
+     */
+    private val shakeDetector by lazy { ShakeDetector(this) { revealDebug() } }
 
     /** True between asking Android to join a scope's Wi-Fi and opening the viewer. */
     private var pendingJoin = false
