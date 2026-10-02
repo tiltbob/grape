@@ -41,14 +41,52 @@ against hardware from this environment; reports and packet captures are welcome.
 The link step matters because the scope has no internet: without pinning its sockets to
 that Wi-Fi network Android would route the app's traffic over mobile data.
 
+## Installing with Obtainium
+
+Releases are published on GitHub with a signed APK attached, which is what
+[Obtainium](https://github.com/ImranR98/Obtainium) consumes. In Obtainium choose
+**Add App**, paste this repository's URL (`https://github.com/tiltbob/grape`) and add it;
+Obtainium then installs `grape-<version>.apk` from the latest release and notifies you of
+new ones. If you want to be strict about which asset it picks, set the APK filter to
+`grape-.*\.apk`.
+
+### Cutting a release (maintainers)
+
+The release workflow (`.github/workflows/release.yml`) runs when a tag like `v1.2.3` is
+pushed: it runs the unit tests, builds the release APK signed with the project key, checks
+the signature, and creates a GitHub Release named after the tag with `grape-1.2.3.apk` and
+its SHA-256. The tag decides both the version name and the version code
+(`major * 1000000 + minor * 1000 + patch`), so tags must be strictly increasing. A
+pre-release suffix such as `v1.2.3-rc1` is accepted but shares its version code with the
+final `v1.2.3`.
+
+One-time setup: run `scripts/make-keystore.sh` locally to create the signing key, back it
+up, and add the four repository secrets it prints (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
+`KEY_ALIAS`, `KEY_PASSWORD`). Android only installs updates signed with the same key, so
+losing the keystore means users must uninstall and reinstall.
+
+Then:
+
+```
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Every push and pull request also runs `.github/workflows/ci.yml` (tests, lint, debug
+APK as a build artifact).
+
 ## Building
 
 ```
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
 ./gradlew testDebugUnitTest    # protocol codec tests
+./gradlew assembleRelease      # unsigned unless GRAPE_KEYSTORE_FILE etc. are set
 ```
 
 Requires JDK 17+ and an Android SDK with platform 35 (`local.properties` → `sdk.dir`).
+To sign a local release build, export `GRAPE_KEYSTORE_FILE`, `GRAPE_KEYSTORE_PASSWORD`,
+`GRAPE_KEY_ALIAS` and `GRAPE_KEY_PASSWORD`; pass `-PgrapeVersionName=… -PgrapeVersionCode=…`
+to override the version.
 
 ## Layout
 

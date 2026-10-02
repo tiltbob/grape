@@ -1,0 +1,108 @@
+# Builds a signed release APK and publishes it as a GitHub Release when a tag like
+# v1.2.3 is pushed. Obtainium (https://github.com/ImranR98/Obtainium) tracks those
+# releases: add https://github.com/<owner>/grape as an app source.
+#
+# One-time setup (see scripts/make-keystore.sh):
+#   secrets.KEYSTORE_BASE64     the release keystore, base64 encoded
+#   secrets.KEYSTORE_PASSWORD   its store password
+#   secrets.KEY_ALIAS           the key alias inside it
+#   secrets.KEY_PASSWORD        that key's password
+# Keep the keystore safe: Android only installs updates signed with the same key.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Signed APK and GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Version from tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          NAME="${TAG#v}"
+          BASE="${NAME%%-*}"
+          IFS=. read -r MAJOR MINOR PATCH <<< "$BASE"
+          for n in "$MAJOR" "$MINOR" "$PATCH"; do
+            [[ "$n" =~ ^[0-9]+$ ]] || { echo "::error::tag must look like v1.2.3 (got $TAG)"; exit 1; }
+          done
+          (( MINOR < 1000 && PATCH < 1000 )) || { echo "::error::minor and patch must be below 1000"; exit 1; }
+          CODE=$(( MAJOR * 1000000 + MINOR * 1000 + PATCH ))
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Building $NAME (versionCode $CODE)"
+
+      - name: Restore signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::repository secret $v is not set; run scripts/make-keystore.sh and add the secrets"
+              exit 1
+            fi
+          done
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
+
+      - name: Build signed release APK
+        env:
+          GRAPE_KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          GRAPE_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          GRAPE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          GRAPE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew :app:assembleRelease --no-daemon --console=plain \
+            -PgrapeVersionName="${{ steps.version.outputs.name }}" \
+            -PgrapeVersionCode="${{ steps.version.outputs.code }}"
+
+      - name: Verify signature and name the artifact
+        id: artifact
+        env:
+          NAME: ${{ steps.version.outputs.name }}
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -f "$APK" || { echo "::error::signed APK not produced (is the signing config picked up?)"; ls -R app/build/outputs/apk; exit 1; }
+          TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
+          "$TOOLS/apksigner" verify --print-certs "$APK"
+          mkdir -p dist
+          OUT="dist/grape-$NAME.apk"
+          cp "$APK" "$OUT"
+          (cd dist && sha256sum "grape-$NAME.apk" > "grape-$NAME.apk.sha256")
+          cat dist/*.sha256
+          echo "apk=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Grape ${{ steps.version.outputs.name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/grape-*.apk
+            dist/grape-*.apk.sha256

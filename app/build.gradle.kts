@@ -3,6 +3,14 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+// The release workflow passes the version from the git tag (v1.2.3 -> 1.2.3 / 1002003).
+val grapeVersionName: String = (project.findProperty("grapeVersionName") as String?) ?: "0.1.0"
+val grapeVersionCode: Int = (project.findProperty("grapeVersionCode") as String?)?.toInt() ?: 1
+
+// Release signing comes from the environment so the keystore never lives in the repo.
+// Without these variables assembleRelease still works and produces an unsigned APK.
+val releaseKeystore: String? = System.getenv("GRAPE_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "io.github.tiltbob.grape"
     compileSdk = 35
@@ -11,8 +19,23 @@ android {
         applicationId = "io.github.tiltbob.grape"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = grapeVersionCode
+        versionName = grapeVersionName
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("GRAPE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("GRAPE_KEY_ALIAS")
+                keyPassword = System.getenv("GRAPE_KEY_PASSWORD")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = false
+            }
+        }
     }
 
     buildTypes {
@@ -20,6 +43,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
