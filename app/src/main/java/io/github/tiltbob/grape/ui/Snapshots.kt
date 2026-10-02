@@ -12,11 +12,11 @@ import java.util.Locale
 
 /** Writes a JPEG frame to the phone's Pictures collection. */
 object Snapshots {
-    private const val ALBUM = "Grape"
+    private const val ALBUM = "EarDigger"
 
     /** Returns a human-readable location of the saved file, or null on failure. */
     fun save(context: Context, jpeg: ByteArray): String? {
-        val name = "grape_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".jpg"
+        val name = "eardigger_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".jpg"
         return runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) saveToMediaStore(context, name, jpeg)
             else saveToAppPictures(context, name, jpeg)

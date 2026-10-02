@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.inputmethod.EditorInfo
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -16,7 +15,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.github.tiltbob.grape.GrapeApp
 import io.github.tiltbob.grape.R
-import io.github.tiltbob.grape.camera.CameraProtocol
 import io.github.tiltbob.grape.camera.DeviceInfo
 import io.github.tiltbob.grape.databinding.ActivityMainBinding
 import io.github.tiltbob.grape.discovery.CameraDiscovery
@@ -24,7 +22,6 @@ import io.github.tiltbob.grape.net.CameraWifi
 import io.github.tiltbob.grape.net.NearbyCamera
 import io.github.tiltbob.grape.net.NearbyScanner
 import io.github.tiltbob.grape.net.NetworkLink
-import io.github.tiltbob.grape.protocol.ml.MlProtocol
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -88,15 +85,6 @@ class MainActivity : AppCompatActivity() {
             binding.rowPrefix.isVisible = false
         }
         binding.btnScan.setOnClickListener { scanNetwork(openFirst = false) }
-        binding.btnOpenManual.setOnClickListener { openManual() }
-        binding.etHost.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_GO) {
-                openManual()
-                true
-            } else {
-                false
-            }
-        }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -261,34 +249,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Ask the given address which protocol it speaks, then open it; default to tube if silent. */
-    private fun openManual() {
-        val host = binding.etHost.text?.toString()?.trim().orEmpty()
-        if (!IPV4.matches(host)) {
-            binding.etHost.error = getString(R.string.error_bad_host)
-            return
-        }
-        scanJob?.cancel()
-        scanJob = lifecycleScope.launch {
-            binding.progressScan.isVisible = true
-            binding.btnOpenManual.isEnabled = false
-            val found = try {
-                CameraDiscovery.scan(link.binder(), listOf(host), timeoutMs = 1200).firstOrNull { it.host == host }
-            } catch (e: Exception) {
-                null
-            }
-            binding.progressScan.isVisible = false
-            binding.btnOpenManual.isEnabled = true
-            val fallback = if (host == MlProtocol.DEFAULT_HOST) CameraProtocol.ML else CameraProtocol.TUBE
-            openCamera(found ?: DeviceInfo(host = host, protocol = fallback))
-        }
-    }
-
     private fun openCamera(info: DeviceInfo) {
         startActivity(ViewerActivity.intent(this, info))
     }
 
-    companion object {
-        private val IPV4 = Regex("""^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$""")
-    }
 }

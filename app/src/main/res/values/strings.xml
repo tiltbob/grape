@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Grape</string>
+    <string name="app_name">EarDigger</string>
     <string name="tagline">Local-only viewer for Bebird Wi-Fi scopes</string>
 
     <string name="section_nearby">Nearby cameras</string>
@@ -42,12 +42,9 @@
     <string name="protocol_tube">UDP 58080/58090</string>
     <string name="protocol_ml">UDP 192.168.10.123</string>
 
-    <string name="section_manual">Or enter the camera address</string>
-    <string name="hint_host">Camera IP, e.g. 192.168.5.1</string>
     <string name="btn_open">Open</string>
-    <string name="error_bad_host">That does not look like an IPv4 address.</string>
 
-    <string name="privacy_note">Grape only ever sends packets to the camera\'s own address on the local network. Bluetooth and Wi-Fi scanning only listen on this phone. No accounts, no analytics, no update checks, no cloud.</string>
+    <string name="privacy_note">EarDigger only ever sends packets to the camera\'s own address on the local network. Bluetooth and Wi-Fi scanning only listen on this phone. No accounts, no analytics, no update checks, no cloud.</string>
 
     <string name="viewer_connecting">Connecting to %1$s…</string>
     <string name="viewer_waiting">Waiting for video…</string>

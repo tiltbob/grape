@@ -1,6 +1,7 @@
-# Grape
+# EarDigger
 
-A clean-room Android viewer for Bebird Wi-Fi ear scopes (the cameras the
+EarDigger (repository `grape`, package `io.github.tiltbob.grape`) is a clean-room Android
+viewer for Bebird Wi-Fi ear scopes (the cameras the
 `com.molink.john.hummingbird` "Bebird" app drives). It connects to the scope's own Wi-Fi,
 shows the live picture, reads the battery, sets the tip light and saves snapshots.
 
@@ -33,10 +34,9 @@ against hardware from this environment; reports and packet captures are welcome.
    finds the camera on that network and opens the live view. A scope you used before is
    rejoined without a tap when it shows up again.
 3. If you prefer, join the scope's Wi-Fi from system settings and tap **Link current
-   Wi-Fi**, or use **Pick camera Wi-Fi** (Android 10+). Then **Scan**, or type the scope's
-   address.
+   Wi-Fi**, or use **Pick camera Wi-Fi** (Android 10+). Then **Scan**.
 4. In the viewer: the slider sets the tip light, **Snapshot** writes a JPEG to
-   `Pictures/Grape`, and **Auto-rotate** toggles compensation of the scope's roll angle.
+   `Pictures/EarDigger`, and **Auto-rotate** toggles compensation of the scope's roll angle.
 
 The link step matters because the scope has no internet: without pinning its sockets to
 that Wi-Fi network Android would route the app's traffic over mobile data.
@@ -46,15 +46,15 @@ that Wi-Fi network Android would route the app's traffic over mobile data.
 Releases are published on GitHub with a signed APK attached, which is what
 [Obtainium](https://github.com/ImranR98/Obtainium) consumes. In Obtainium choose
 **Add App**, paste this repository's URL (`https://github.com/tiltbob/grape`) and add it;
-Obtainium then installs `grape-<version>.apk` from the latest release and notifies you of
+Obtainium then installs `eardigger-<version>.apk` from the latest release and notifies you of
 new ones. If you want to be strict about which asset it picks, set the APK filter to
-`grape-.*\.apk`.
+`eardigger-.*\.apk`.
 
 ### Cutting a release (maintainers)
 
 The release workflow (`.github/workflows/release.yml`) runs when a tag like `v1.2.3` is
 pushed: it runs the unit tests, builds the release APK signed with the project key, checks
-the signature, and creates a GitHub Release named after the tag with `grape-1.2.3.apk` and
+the signature, and creates a GitHub Release named after the tag with `eardigger-1.2.3.apk` and
 its SHA-256. The tag decides both the version name and the version code
 (`major * 1000000 + minor * 1000 + patch`), so tags must be strictly increasing. A
 pre-release suffix such as `v1.2.3-rc1` is accepted but shares its version code with the

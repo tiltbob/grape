@@ -91,18 +91,18 @@ jobs:
           TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
           "$TOOLS/apksigner" verify --print-certs "$APK"
           mkdir -p dist
-          OUT="dist/grape-$NAME.apk"
+          OUT="dist/eardigger-$NAME.apk"
           cp "$APK" "$OUT"
-          (cd dist && sha256sum "grape-$NAME.apk" > "grape-$NAME.apk.sha256")
+          (cd dist && sha256sum "eardigger-$NAME.apk" > "eardigger-$NAME.apk.sha256")
           cat dist/*.sha256
           echo "apk=$OUT" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Grape ${{ steps.version.outputs.name }}
+          name: EarDigger ${{ steps.version.outputs.name }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            dist/grape-*.apk
-            dist/grape-*.apk.sha256
+            dist/eardigger-*.apk
+            dist/eardigger-*.apk.sha256

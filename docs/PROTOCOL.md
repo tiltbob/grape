@@ -42,7 +42,7 @@ capabilities) use the fixed passphrase `12345678`, which the scope also broadcas
 | "ML" | ML / 模联 (Molink) | M9 Pro, X7 Pro, X17 Pro, Note3, T15, P30, D3, E3, C3/T5, A2/B2, BB1, K10, Mate8, S5, S7, R5 | `192.168.10.123` | ask the fixed address |
 
 The vendor app first tries the ML battery command at `192.168.10.123`; if that fails it
-broadcasts the tube board-info request on port 58090. Grape runs both probes concurrently.
+broadcasts the tube board-info request on port 58090. EarDigger runs both probes concurrently.
 
 ---
 
@@ -59,7 +59,7 @@ broadcasts the tube board-info request on port 58090. Grape runs both probes con
 
 Send `20 36` to start, `20 37` to stop. The scope streams back to the source address and
 port of the START. It keeps streaming to every client that ever sent START until that
-client sends STOP, so Grape uses a fixed client port (58081 when free), sends STOP before
+client sends STOP, so EarDigger uses a fixed client port (58081 when free), sends STOP before
 START, and STOP on exit. The stream also dies after roughly a second unless the client
 keeps talking on the command port; polling the battery once a second keeps it alive.
 If no frame arrives for 3 s the vendor app sends STOP, waits 100 ms and sends START again.
