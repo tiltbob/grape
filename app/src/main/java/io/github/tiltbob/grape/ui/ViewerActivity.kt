@@ -62,7 +62,7 @@ class ViewerActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         info = DeviceInfoJson.decode(intent.getStringExtra(EXTRA_DEVICE) ?: error("missing device"))
-        binding.tvDevice.text = "${info.displayName} · ${info.host}"
+        binding.tvDevice.text = info.displayName
         binding.tvBattery.text = getString(R.string.viewer_battery_unknown)
         binding.tvFps.text = ""
         binding.tvLightValue.text = ""
@@ -143,7 +143,7 @@ class ViewerActivity : AppCompatActivity() {
                         else -> null
                     } ?: return@launch
                     info = parsed
-                    binding.tvDevice.text = "${info.displayName} · ${info.host}"
+                    binding.tvDevice.text = info.displayName
                 }
             }
             launch {

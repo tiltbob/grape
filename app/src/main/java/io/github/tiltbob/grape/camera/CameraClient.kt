@@ -1,5 +1,7 @@
 package io.github.tiltbob.grape.camera
 
+import io.github.tiltbob.grape.net.CameraWifi
+
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.Closeable
@@ -28,10 +30,9 @@ data class DeviceInfo(
     /** The raw board-info JSON document, if the device reported one. */
     val rawInfo: String? = null,
 ) {
+    /** `Bebird R1`: from the board info when we have it, else from the Wi-Fi name, else the address. */
     val displayName: String
-        get() = listOfNotNull(brand?.takeIf { it.isNotBlank() }, model?.takeIf { it.isNotBlank() })
-            .joinToString(" ")
-            .ifBlank { ssid ?: host }
+        get() = CameraWifi.prettyName(brand, model) ?: CameraWifi.prettyName(ssid).ifBlank { host }
 }
 
 /** One decoded-ready JPEG frame plus the roll angle reported with it. */

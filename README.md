@@ -47,8 +47,8 @@ The scope is its own Wi-Fi access point, so there is nothing to configure:
    With it on, the picture is shown as a circle: a disc looks the same at every angle, so
    only the scene moves, not the frame.
 
-**If a scope is not found:** shake the phone hard three times on the connect screen (a
-"rage shake") to reveal the **Debug log** card. It records every step of pairing and
+**If a scope is not found:** shake the phone hard half a dozen times on the connect screen
+(a "rage shake") to reveal the **Debug log** card. It records every step of pairing and
 discovery (permissions, Bluetooth and Wi-Fi hits, the network Android handed over, every
 probe sent and reply received). **Share log** opens the system share sheet, so the report
 can go straight to the Claude app or anywhere else; **Copy** puts it on the clipboard;

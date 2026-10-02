@@ -47,6 +47,21 @@ class CameraWifiTest {
     }
 
     @Test
+    fun prettyNamesDropTheUnitNumber() {
+        assertEquals("Bebird R1", CameraWifi.prettyName("bebird-R1-630136"))
+        assertEquals("Bebird ES", CameraWifi.prettyName("bebird-ES-1A2B3C"))
+        assertEquals("Bebird M9 Pro", CameraWifi.prettyName("Bebird M9 Pro"))
+        assertEquals("Xlife W3", CameraWifi.prettyName("xlife_W3_1234"))
+        assertEquals("Bebird Note5", CameraWifi.prettyName("bebird-Note5-77"))
+        assertEquals("Bebird", CameraWifi.prettyName("bebird-630136"))
+        assertEquals("Bebird", CameraWifi.prettyName("BEBIRD"))
+        assertEquals("", CameraWifi.prettyName(null))
+        assertEquals("Bebird R1", CameraWifi.prettyName("bebird", "R1"))
+        assertEquals("R1", CameraWifi.prettyName(null, "R1"))
+        assertNull(CameraWifi.prettyName(" ", ""))
+    }
+
+    @Test
     fun mergeKeepsBestOfBothRadios() {
         val ble = NearbyCamera(ssid = "bebird-ES-1", bssid = "AA:BB:CC:DD:EE:FD", bleAddress = "AA:BB:CC:DD:EE:FF", seenByBluetooth = true, rssi = -60)
         val wifi = NearbyCamera(ssid = "bebird-ES-1", bssid = "aa:bb:cc:dd:ee:fd", capabilities = "[ESS]", seenByWifi = true, rssi = -50)

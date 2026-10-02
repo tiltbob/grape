@@ -20,6 +20,9 @@ data class NearbyCamera(
     /** Heard by a radio during this scan, as opposed to only remembered. */
     val heard: Boolean get() = seenByBluetooth || seenByWifi
 
+    /** `Bebird R1` for `bebird-R1-630136`. */
+    val displayName: String get() = CameraWifi.prettyName(ssid)
+
     val security: CameraWifi.Security get() = CameraWifi.securityFor(ssid, capabilities)
 
     fun merge(other: NearbyCamera): NearbyCamera = copy(

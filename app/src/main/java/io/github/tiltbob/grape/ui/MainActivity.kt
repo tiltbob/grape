@@ -218,7 +218,7 @@ class MainActivity : AppCompatActivity() {
         pendingJoin = true
         pendingSsid = camera.ssid
         known.remember(camera)
-        binding.tvNearbyStatus.text = getString(R.string.nearby_joining, camera.ssid)
+        binding.tvNearbyStatus.text = getString(R.string.nearby_connecting, camera.displayName)
         binding.progressNearby.isVisible = true
         binding.btnFindNearby.isEnabled = false
         link.connectTo(camera)
@@ -226,7 +226,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun confirmForget(camera: NearbyCamera) {
         MaterialAlertDialogBuilder(this)
-            .setTitle(getString(R.string.forget_title, camera.ssid))
+            .setTitle(getString(R.string.forget_title, camera.displayName))
             .setMessage(R.string.forget_message)
             .setNegativeButton(R.string.btn_cancel, null)
             .setPositiveButton(R.string.btn_forget) { _, _ -> known.forget(camera.ssid) }
@@ -250,7 +250,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun onLinkStatus(status: NetworkLink.Status) {
         if (!pendingJoin) return
-        val ssid = pendingSsid ?: link.targetSsid ?: getString(R.string.the_scope_wifi)
+        val ssid = (pendingSsid ?: link.targetSsid)?.let { CameraWifi.prettyName(it) }?.ifBlank { null }
+            ?: getString(R.string.the_scope_wifi)
         when (status) {
             NetworkLink.Status.AVAILABLE -> findCameraOnJoinedNetwork(ssid, rememberAs = pendingSsid ?: link.targetSsid)
             NetworkLink.Status.UNAVAILABLE, NetworkLink.Status.LOST -> {

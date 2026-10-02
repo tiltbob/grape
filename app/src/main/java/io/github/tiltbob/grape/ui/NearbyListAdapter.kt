@@ -34,7 +34,7 @@ class NearbyListAdapter(
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val cam = items[position]
         val ctx = holder.itemView.context
-        holder.binding.tvName.text = cam.ssid
+        holder.binding.tvName.text = cam.displayName
         val radios = listOfNotNull(
             if (cam.seenByBluetooth) ctx.getString(R.string.seen_bluetooth) else null,
             if (cam.seenByWifi) ctx.getString(R.string.seen_wifi) else null,
@@ -51,6 +51,7 @@ class NearbyListAdapter(
             )
         }
         holder.binding.tvDetails.text = listOfNotNull(
+            cam.ssid.takeIf { !it.equals(cam.displayName, ignoreCase = true) },
             if (cam.heard) radios.ifBlank { null } else ctx.getString(R.string.nearby_remembered_tag),
             security,
             cam.rssi?.takeIf { cam.heard }?.let { "$it dBm" },

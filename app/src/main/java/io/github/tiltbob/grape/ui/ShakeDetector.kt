@@ -8,9 +8,9 @@ import android.hardware.SensorManager
 import kotlin.math.sqrt
 
 /**
- * Fires [onShake] after a burst of hard shakes (the "rage shake"). Three accelerometer
- * peaks above [THRESHOLD_G] within [WINDOW_MS] count; a gentle wobble or a single bump
- * does not. Only listens between [start] and [stop].
+ * Fires [onShake] after a burst of hard shakes (the "rage shake"). Six accelerometer
+ * peaks above [THRESHOLD_G] within [WINDOW_MS] count; a gentle wobble, a bump or a
+ * couple of swings do not. Only listens between [start] and [stop].
  */
 class ShakeDetector(context: Context, private val onShake: () -> Unit) : SensorEventListener {
 
@@ -62,8 +62,8 @@ class ShakeDetector(context: Context, private val onShake: () -> Unit) : SensorE
 
     private companion object {
         const val THRESHOLD_G = 2.7f
-        const val PEAKS_NEEDED = 3
-        const val WINDOW_MS = 1500L
+        const val PEAKS_NEEDED = 6
+        const val WINDOW_MS = 3000L
         const val DEBOUNCE_MS = 120L
         const val COOLDOWN_MS = 2000L
     }

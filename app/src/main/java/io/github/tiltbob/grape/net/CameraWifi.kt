@@ -57,6 +57,30 @@ object CameraWifi {
         return m in SECURED_MODELS || SECURED_MODEL_PREFIXES.any { m.startsWith(it) }
     }
 
+    /**
+     * A name fit for the screen: `bebird-R1-630136` -> `Bebird R1`, `xlife_W3_1A2B` -> `Xlife W3`,
+     * `Bebird M9 Pro` -> `Bebird M9 Pro`. Trailing unit numbers (all digits, or four or more
+     * hex characters) are dropped; the raw SSID still tells two units of one model apart.
+     */
+    fun prettyName(ssid: String?): String {
+        if (ssid.isNullOrBlank()) return ""
+        val tokens = ssid.trim().split('-', '_', ' ').filter { it.isNotBlank() }.toMutableList()
+        while (tokens.size > 1 && isUnitNumber(tokens.last())) tokens.removeAt(tokens.lastIndex)
+        return tokens.mapIndexed { i, t -> if (i == 0) prettyBrand(t) else t }.joinToString(" ")
+    }
+
+    /** `bebird` + `R1` -> `Bebird R1`; null when neither is known. */
+    fun prettyName(brand: String?, model: String?): String? =
+        listOfNotNull(brand?.trim()?.ifBlank { null }?.let(::prettyBrand), model?.trim()?.ifBlank { null })
+            .joinToString(" ")
+            .ifBlank { null }
+
+    private fun prettyBrand(brand: String): String = brand.lowercase().replaceFirstChar { it.uppercase() }
+
+    private fun isUnitNumber(token: String): Boolean =
+        token.all { it.isDigit() } ||
+            (token.length >= 4 && token.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' })
+
     enum class Security { OPEN, WPA2, WPA3 }
 
     /** Pick the security from Wi-Fi scan capabilities when known, else from the SSID. */
