@@ -19,6 +19,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import io.github.tiltbob.grape.debug.DebugLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +32,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * Both are passive radio listening on the phone; nothing is transmitted to anyone.
  */
 class NearbyScanner(private val context: Context) {
+
+    private companion object {
+        const val TAG = "Nearby"
+    }
 
     private val handler = Handler(Looper.getMainLooper())
     private val wifiManager = context.applicationContext.getSystemService(WifiManager::class.java)
@@ -58,13 +63,20 @@ class NearbyScanner(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.NEARBY_WIFI_DEVICES)
             add(Manifest.permission.BLUETOOTH_SCAN)
+            add(Manifest.permission.BLUETOOTH_CONNECT)
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             add(Manifest.permission.BLUETOOTH_SCAN)
+            add(Manifest.permission.BLUETOOTH_CONNECT)
             add(Manifest.permission.ACCESS_FINE_LOCATION)
         } else {
             add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
+
+    private val seenBle = HashSet<String>()
+    private val seenWifi = HashSet<String>()
+    private var bleHits = 0
+    private var wifiResults = 0
 
     private fun granted(permission: String) =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
@@ -73,11 +85,17 @@ class NearbyScanner(private val context: Context) {
     fun start(durationMs: Long = 8000L) {
         stop()
         _cameras.value = emptyList()
+        seenBle.clear()
+        seenWifi.clear()
+        bleHits = 0
+        wifiResults = 0
         val notes = mutableListOf<String>()
         _scanning.value = true
+        DebugLog.log(TAG, "start(): prefixes=$namePrefixes duration=${durationMs}ms")
         startBle(notes)
         startWifi(notes)
         _notes.value = notes
+        if (notes.isNotEmpty()) DebugLog.log(TAG, "notes: $notes")
         handler.postDelayed(stopRunnable, durationMs)
     }
 
@@ -85,11 +103,15 @@ class NearbyScanner(private val context: Context) {
     @SuppressLint("MissingPermission")
     fun stop() {
         handler.removeCallbacks(stopRunnable)
+        val wasScanning = bleCallback != null || wifiReceiver != null
         bleCallback?.let { cb -> runCatching { bleScanner?.stopScan(cb) } }
         bleCallback = null
         wifiReceiver?.let { runCatching { context.applicationContext.unregisterReceiver(it) } }
         wifiReceiver = null
         _scanning.value = false
+        if (wasScanning) {
+            DebugLog.log(TAG, "stop(): ble advertisements=$bleHits distinct=${seenBle.size}, wifi results=$wifiResults distinct ssids=${seenWifi.size}, cameras=${_cameras.value.map { it.ssid }}")
+        }
     }
 
     private fun locationServicesOn(): Boolean {
@@ -107,6 +129,7 @@ class NearbyScanner(private val context: Context) {
         val adapter = bluetoothManager?.adapter
         if (adapter == null) {
             notes += "no Bluetooth"
+            DebugLog.log(TAG, "ble: no adapter")
             return
         }
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -116,10 +139,12 @@ class NearbyScanner(private val context: Context) {
         }
         if (!granted(permission)) {
             notes += "Bluetooth scan permission not granted"
+            DebugLog.log(TAG, "ble: $permission not granted")
             return
         }
         if (!adapter.isEnabled) {
             notes += "Bluetooth is off"
+            DebugLog.log(TAG, "ble: adapter off")
             return
         }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && !locationServicesOn()) {
@@ -134,6 +159,7 @@ class NearbyScanner(private val context: Context) {
             override fun onScanResult(callbackType: Int, result: ScanResult) = onBle(result)
             override fun onBatchScanResults(results: MutableList<ScanResult>) = results.forEach(::onBle)
             override fun onScanFailed(errorCode: Int) {
+                DebugLog.log(TAG, "ble: onScanFailed($errorCode)")
                 _notes.value = _notes.value + "Bluetooth scan failed ($errorCode)"
             }
         }
@@ -143,16 +169,28 @@ class NearbyScanner(private val context: Context) {
             scanner.startScan(null, settings, cb)
             bleScanner = scanner
             bleCallback = cb
+            DebugLog.log(TAG, "ble: scan started (low latency, no filters)")
         } catch (e: SecurityException) {
+            DebugLog.log(TAG, "ble: startScan SecurityException", e)
             notes += "Bluetooth scan not permitted"
         }
     }
 
+    @SuppressLint("MissingPermission") // device.name is wrapped in a SecurityException catch
     private fun onBle(result: ScanResult) {
-        // The advertised name needs no BLUETOOTH_CONNECT permission, unlike device.name.
-        val name = result.scanRecord?.deviceName?.trim() ?: return
-        if (!CameraWifi.looksLikeCamera(name, namePrefixes)) return
+        bleHits++
         val address = result.device?.address ?: return
+        // The advertised name needs no BLUETOOTH_CONNECT permission, unlike device.name.
+        var name = result.scanRecord?.deviceName?.trim()
+        if (name.isNullOrEmpty()) {
+            name = try { result.device?.name?.trim() } catch (e: SecurityException) { null }
+        }
+        if (seenBle.add(address)) {
+            DebugLog.log(TAG, "ble: seen $address name=${name ?: "-"} rssi=${result.rssi} adv=${result.scanRecord?.bytes?.let { DebugLog.hex(it, it.size, 12) }}")
+        }
+        if (name.isNullOrEmpty()) return
+        if (!CameraWifi.looksLikeCamera(name, namePrefixes)) return
+        DebugLog.log(TAG, "ble: CAMERA $name at $address -> bssid ${CameraWifi.bssidFromBleAddress(address)}")
         add(
             NearbyCamera(
                 ssid = name,
@@ -167,6 +205,7 @@ class NearbyScanner(private val context: Context) {
     private fun startWifi(notes: MutableList<String>) {
         val wm = wifiManager ?: run {
             notes += "no Wi-Fi"
+            DebugLog.log(TAG, "wifi: no WifiManager")
             return
         }
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -176,10 +215,12 @@ class NearbyScanner(private val context: Context) {
         }
         if (!granted(permission)) {
             notes += "Wi-Fi scan permission not granted"
+            DebugLog.log(TAG, "wifi: $permission not granted")
             return
         }
         if (!wm.isWifiEnabled) {
             notes += "Wi-Fi is off"
+            DebugLog.log(TAG, "wifi: disabled")
             return
         }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && !locationServicesOn()) {
@@ -199,22 +240,30 @@ class NearbyScanner(private val context: Context) {
         // Cached results first (Android throttles active scans), then ask for a fresh one.
         readWifiResults(wm)
         @Suppress("DEPRECATION")
-        runCatching { wm.startScan() }
+        val started = runCatching { wm.startScan() }.getOrDefault(false)
+        DebugLog.log(TAG, "wifi: startScan() accepted=$started (false usually means Android's scan throttle)")
     }
 
     private fun readWifiResults(wm: WifiManager) {
         val results = try {
             wm.scanResults
         } catch (e: SecurityException) {
+            DebugLog.log(TAG, "wifi: getScanResults SecurityException", e)
             return
         }
+        wifiResults += results.size
+        DebugLog.log(TAG, "wifi: ${results.size} scan results")
         for (r in results) {
             val ssid = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 r.wifiSsid?.toString()?.trim('"')
             } else {
                 @Suppress("DEPRECATION") r.SSID
             }
+            if (!ssid.isNullOrEmpty() && seenWifi.add(ssid)) {
+                DebugLog.log(TAG, "wifi: ssid=\"$ssid\" bssid=${r.BSSID} rssi=${r.level} caps=${r.capabilities}")
+            }
             if (!CameraWifi.looksLikeCamera(ssid, namePrefixes)) continue
+            DebugLog.log(TAG, "wifi: CAMERA $ssid at ${r.BSSID}")
             add(
                 NearbyCamera(
                     ssid = ssid!!,

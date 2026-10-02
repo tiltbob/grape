@@ -2,6 +2,7 @@ package io.github.tiltbob.grape.ui
 
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -17,13 +18,17 @@ import io.github.tiltbob.grape.GrapeApp
 import io.github.tiltbob.grape.R
 import io.github.tiltbob.grape.camera.DeviceInfo
 import io.github.tiltbob.grape.databinding.ActivityMainBinding
+import io.github.tiltbob.grape.debug.DebugLog
+import io.github.tiltbob.grape.debug.DebugReport
 import io.github.tiltbob.grape.discovery.CameraDiscovery
 import io.github.tiltbob.grape.net.CameraWifi
 import io.github.tiltbob.grape.net.NearbyCamera
 import io.github.tiltbob.grape.net.NearbyScanner
 import io.github.tiltbob.grape.net.NetworkLink
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class MainActivity : AppCompatActivity() {
 
@@ -46,6 +51,7 @@ class MainActivity : AppCompatActivity() {
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            DebugLog.log("Main", "permission result: $result")
             if (result.values.any { it }) startNearbyScan() else {
                 binding.tvNearbyStatus.text = getString(R.string.permission_needed)
             }
@@ -84,7 +90,20 @@ class MainActivity : AppCompatActivity() {
         } else {
             binding.rowPrefix.isVisible = false
         }
-        binding.btnScan.setOnClickListener { scanNetwork(openFirst = false) }
+        binding.btnScan.setOnClickListener {
+            DebugLog.log("Main", "tap: Scan")
+            scanNetwork(openFirst = false)
+        }
+        binding.btnShareLog.setOnClickListener {
+            DebugLog.log("Main", "tap: Share log")
+            runCatching { DebugReport.share(this, link) }
+                .onFailure { DebugLog.log("Main", "share failed", it) }
+        }
+        binding.btnCopyLog.setOnClickListener {
+            DebugReport.copy(this, link)
+            android.widget.Toast.makeText(this, R.string.debug_copied, android.widget.Toast.LENGTH_SHORT).show()
+        }
+        binding.btnClearLog.setOnClickListener { DebugLog.clear() }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -97,12 +116,16 @@ class MainActivity : AppCompatActivity() {
                         binding.tvNearbyNotes.text = notes.joinToString("\n")
                     }
                 }
+                launch { DebugLog.version.collect { binding.tvDebugTail.text = DebugLog.tail(DEBUG_TAIL_LINES) } }
             }
         }
     }
 
     override fun onStart() {
         super.onStart()
+        DebugLog.log("Main", "onStart: link=${link.status.value} permissions=${hasAllScanPermissions()}")
+        // Attach to whatever Wi-Fi the phone is on, so a plain Scan has a network to use.
+        if (link.status.value == NetworkLink.Status.NONE) link.requestWifi()
         // Listen right away when we already may; never prompt without a tap.
         if (hasAllScanPermissions() && !scanner.scanning.value && link.status.value != NetworkLink.Status.AVAILABLE) {
             startNearbyScan()
@@ -124,6 +147,7 @@ class MainActivity : AppCompatActivity() {
         val missing = scanner.requiredPermissions().filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
+        DebugLog.log("Main", "tap: Find nearby (missing permissions: $missing)")
         if (missing.isEmpty()) startNearbyScan() else permissionLauncher.launch(missing.toTypedArray())
     }
 
@@ -223,10 +247,18 @@ class MainActivity : AppCompatActivity() {
             binding.progressScan.isVisible = true
             binding.btnScan.isEnabled = false
             binding.tvScanStatus.text = getString(R.string.scan_running)
+            ensureLinked()
+            DebugLog.log("Main", "scanNetwork: link=${link.status.value} local=${link.localAddress()} candidates=${link.candidateHosts()}")
+            val wifi = applicationContext.getSystemService(WifiManager::class.java)
+            // Without this lock many phones' Wi-Fi drivers drop broadcast datagrams such as the beacon.
+            val lock = wifi?.createMulticastLock("eardigger-scan")?.apply { setReferenceCounted(false); acquire() }
             val found = try {
                 CameraDiscovery.scan(link.binder(), link.candidateHosts())
             } catch (e: Exception) {
+                DebugLog.log("Main", "scan failed", e)
                 emptyList()
+            } finally {
+                runCatching { lock?.release() }
             }
             cameraAdapter.submit(found)
             binding.tvScanStatus.text = if (found.isEmpty()) {
@@ -249,8 +281,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** If no Wi-Fi network is linked yet, ask Android for the current one and wait briefly. */
+    private suspend fun ensureLinked() {
+        if (link.network.value != null) return
+        if (link.status.value != NetworkLink.Status.REQUESTING) link.requestWifi()
+        val got = withTimeoutOrNull(LINK_WAIT_MS) {
+            link.status.first { it == NetworkLink.Status.AVAILABLE || it == NetworkLink.Status.UNAVAILABLE }
+        }
+        DebugLog.log("Main", "ensureLinked: ${got ?: "timed out"} (${link.describeNetwork().trim()})")
+    }
+
     private fun openCamera(info: DeviceInfo) {
         startActivity(ViewerActivity.intent(this, info))
     }
 
+
+    private companion object {
+        const val DEBUG_TAIL_LINES = 12
+        const val LINK_WAIT_MS = 4000L
+    }
 }

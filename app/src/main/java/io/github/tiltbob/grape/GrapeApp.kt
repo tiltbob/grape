@@ -3,6 +3,9 @@ package io.github.tiltbob.grape
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
+import android.util.Log
+import io.github.tiltbob.grape.debug.DebugLog
 import io.github.tiltbob.grape.net.NearbyScanner
 import io.github.tiltbob.grape.net.NetworkLink
 
@@ -25,6 +28,8 @@ class GrapeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        DebugLog.sink = { tag, message -> Log.d("EarDigger/$tag", message) }
+        DebugLog.log("App", "start: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) on ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}")
         link = NetworkLink(this)
         scanner = NearbyScanner(this)
         prefs = getSharedPreferences("grape", Context.MODE_PRIVATE)

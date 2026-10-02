@@ -38,6 +38,13 @@ against hardware from this environment; reports and packet captures are welcome.
 4. In the viewer: the slider sets the tip light, **Snapshot** writes a JPEG to
    `Pictures/EarDigger`, and **Auto-rotate** toggles compensation of the scope's roll angle.
 
+**If a scope is not found:** the connect screen ends with a **Debug log** card that records
+every step of pairing and discovery (permissions, Bluetooth and Wi-Fi hits, the network
+Android handed over, every probe sent and reply received). **Share log** opens the system
+share sheet, so the report can go straight to the Claude app or anywhere else; **Copy**
+puts it on the clipboard. It contains nearby network names and local addresses, nothing
+else personal.
+
 The link step matters because the scope has no internet: without pinning its sockets to
 that Wi-Fi network Android would route the app's traffic over mobile data.
 

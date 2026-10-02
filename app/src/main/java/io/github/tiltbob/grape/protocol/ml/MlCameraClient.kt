@@ -6,6 +6,7 @@ import io.github.tiltbob.grape.camera.ConnectionState
 import io.github.tiltbob.grape.camera.DeviceInfo
 import io.github.tiltbob.grape.camera.SocketBinder
 import io.github.tiltbob.grape.camera.VideoFrame
+import io.github.tiltbob.grape.debug.DebugLog
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -220,6 +221,7 @@ class MlCameraClient(
                 }
                 val chunk = MlProtocol.parseVideoChunk(buffer, packet.length) ?: continue
                 val frame = assembler.offer(chunk, buffer) ?: continue
+                if (assembler.framesCompleted == 1L) DebugLog.log("MlClient", "first UDP frame: ${frame.jpeg.size} bytes")
                 emit(frame.jpeg, frame.angleRaw)
             }
         } finally {
@@ -249,7 +251,7 @@ class MlCameraClient(
                     parser.feed(block, n)
                 }
             } catch (e: IOException) {
-                // not reachable on TCP (most units stream over UDP only); retry slowly
+                DebugLog.log("MlClient", "tcp ${info.host}:${MlProtocol.TCP_VIDEO_PORT}: ${e.javaClass.simpleName}: ${e.message}")
             } finally {
                 runCatching { socket.close() }
             }

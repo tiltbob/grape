@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.PatternMatcher
 import androidx.annotation.RequiresApi
 import io.github.tiltbob.grape.camera.SocketBinder
+import io.github.tiltbob.grape.debug.DebugLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +35,10 @@ import java.net.InetAddress
  *  - [requestWifi]: whatever Wi-Fi the user already joined from system settings.
  */
 class NetworkLink(context: Context) {
+
+    private companion object {
+        const val TAG = "NetworkLink"
+    }
 
     enum class Status { NONE, REQUESTING, AVAILABLE, UNAVAILABLE, LOST }
 
@@ -56,6 +61,7 @@ class NetworkLink(context: Context) {
 
     fun requestWifi() {
         targetSsid = null
+        DebugLog.log(TAG, "requestWifi(): any Wi-Fi network without internet")
         request(null)
     }
 
@@ -65,6 +71,7 @@ class NetworkLink(context: Context) {
         val specifier = WifiNetworkSpecifier.Builder()
             .setSsidPattern(PatternMatcher(prefix, PatternMatcher.PATTERN_PREFIX))
             .build()
+        DebugLog.log(TAG, "requestWifiBySsidPrefix(\"$prefix\")")
         request(specifier)
     }
 
@@ -76,6 +83,7 @@ class NetworkLink(context: Context) {
      */
     fun connectTo(camera: NearbyCamera) {
         targetSsid = camera.ssid
+        DebugLog.log(TAG, "connectTo(ssid=${camera.ssid} bssid=${camera.bssid} security=${camera.security} ble=${camera.bleAddress})")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             request(specifierFor(camera))
         } else {
@@ -143,9 +151,11 @@ class NetworkLink(context: Context) {
             override fun onAvailable(network: Network) {
                 _network.value = network
                 _status.value = Status.AVAILABLE
+                DebugLog.log(TAG, "onAvailable($network): ${describeNetwork()}")
             }
 
             override fun onLost(network: Network) {
+                DebugLog.log(TAG, "onLost($network)")
                 if (_network.value == network) {
                     _network.value = null
                     _status.value = Status.LOST
@@ -153,6 +163,7 @@ class NetworkLink(context: Context) {
             }
 
             override fun onUnavailable() {
+                DebugLog.log(TAG, "onUnavailable()")
                 _status.value = Status.UNAVAILABLE
             }
         }
@@ -160,7 +171,9 @@ class NetworkLink(context: Context) {
         _status.value = Status.REQUESTING
         try {
             cm.requestNetwork(builder.build(), cb)
+            DebugLog.log(TAG, "requestNetwork sent (specifier=${specifier != null})")
         } catch (e: Exception) {
+            DebugLog.log(TAG, "requestNetwork failed", e)
             callback = null
             _status.value = Status.UNAVAILABLE
         }
@@ -176,9 +189,40 @@ class NetworkLink(context: Context) {
 
     /** Pins sockets to the linked network; a no-op when nothing is linked. */
     fun binder(): SocketBinder = SocketBinder(
-        datagram = { socket -> _network.value?.let { runCatching { it.bindSocket(socket) } } },
-        stream = { socket -> _network.value?.let { runCatching { it.bindSocket(socket) } } },
+        datagram = { socket ->
+            val n = _network.value
+            if (n == null) {
+                DebugLog.log(TAG, "bind datagram socket: NO linked network, using the phone's default route")
+            } else {
+                runCatching { n.bindSocket(socket) }.onFailure { DebugLog.log(TAG, "bindSocket(datagram) failed", it) }
+            }
+        },
+        stream = { socket ->
+            val n = _network.value
+            if (n == null) {
+                DebugLog.log(TAG, "bind stream socket: NO linked network, using the phone's default route")
+            } else {
+                runCatching { n.bindSocket(socket) }.onFailure { DebugLog.log(TAG, "bindSocket(stream) failed", it) }
+            }
+        },
     )
+
+    /** One-line summary of the linked network for the debug log. */
+    fun describeNetwork(): String {
+        val n = _network.value ?: return "  no network linked"
+        val lp = cm.getLinkProperties(n)
+        val caps = cm.getNetworkCapabilities(n)
+        val sb = StringBuilder()
+        sb.append("  interface=").append(lp?.interfaceName)
+        sb.append(" addresses=").append(lp?.linkAddresses?.joinToString { it.toString() })
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) sb.append(" dhcp=").append(lp?.dhcpServerAddress?.hostAddress)
+        sb.append(" routes=").append(lp?.routes?.joinToString { r -> "${r.destination}->${r.gateway?.hostAddress ?: "-"}" })
+        sb.append(" dns=").append(lp?.dnsServers?.joinToString { it.hostAddress ?: "?" })
+        sb.append(" wifi=").append(caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))
+        sb.append(" internet=").append(caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET))
+        sb.append(" validated=").append(caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
+        return sb.toString()
+    }
 
     private fun linkProperties(): LinkProperties? = _network.value?.let { cm.getLinkProperties(it) }
 

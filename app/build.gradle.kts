@@ -4,8 +4,8 @@ plugins {
 }
 
 // The release workflow passes the version from the git tag (v1.2.3 -> 1.2.3 / 1002003).
-val grapeVersionName: String = (project.findProperty("grapeVersionName") as String?) ?: "0.2.0"
-val grapeVersionCode: Int = (project.findProperty("grapeVersionCode") as String?)?.toInt() ?: 2000
+val grapeVersionName: String = (project.findProperty("grapeVersionName") as String?) ?: "0.2.1"
+val grapeVersionCode: Int = (project.findProperty("grapeVersionCode") as String?)?.toInt() ?: 2001
 
 // Release signing comes from the environment so the keystore never lives in the repo.
 // Without these variables assembleRelease still works and produces an unsigned APK.
@@ -58,6 +58,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     testOptions {

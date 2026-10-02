@@ -20,6 +20,7 @@ import io.github.tiltbob.grape.camera.DeviceInfo
 import io.github.tiltbob.grape.camera.DeviceInfoJson
 import io.github.tiltbob.grape.camera.VideoFrame
 import io.github.tiltbob.grape.databinding.ActivityViewerBinding
+import io.github.tiltbob.grape.debug.DebugLog
 import io.github.tiltbob.grape.protocol.ml.MlCameraClient
 import io.github.tiltbob.grape.protocol.ml.MlDiscovery
 import io.github.tiltbob.grape.protocol.tube.TubeCameraClient
@@ -91,6 +92,7 @@ class ViewerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        DebugLog.log("Viewer", "close ${info.host}")
         sessionJob?.cancel()
         sessionJob = null
         val c = client
@@ -110,12 +112,14 @@ class ViewerActivity : AppCompatActivity() {
         binding.tvStatus.isVisible = true
         binding.tvStatus.text = getString(R.string.viewer_connecting, info.displayName)
 
+        DebugLog.log("Viewer", "open ${info.host} ${info.protocol} model=${info.model} link=${link.status.value}")
         val c = try {
             CameraClients.create(info, link.binder()).also {
                 it.connect()
                 it.start()
             }
         } catch (e: Exception) {
+            DebugLog.log("Viewer", "connect failed", e)
             binding.tvStatus.text = getString(R.string.viewer_error, e.message ?: e.javaClass.simpleName)
             return
         }

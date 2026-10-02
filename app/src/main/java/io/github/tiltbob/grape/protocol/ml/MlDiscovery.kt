@@ -3,6 +3,7 @@ package io.github.tiltbob.grape.protocol.ml
 import io.github.tiltbob.grape.camera.CameraProtocol
 import io.github.tiltbob.grape.camera.DeviceInfo
 import io.github.tiltbob.grape.camera.SocketBinder
+import io.github.tiltbob.grape.debug.DebugLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -21,6 +22,7 @@ import java.net.SocketTimeoutException
  * gateway of the linked Wi-Fi, in case the address differs) for its board info.
  */
 object MlDiscovery {
+    private const val TAG = "MlDiscovery"
 
     suspend fun probe(binder: SocketBinder, extraHosts: List<String>): List<DeviceInfo> = coroutineScope {
         val hosts = (listOf(MlProtocol.DEFAULT_HOST) + extraHosts).distinct()
@@ -36,15 +38,18 @@ object MlDiscovery {
                 soTimeout = 200
             }
         } catch (e: IOException) {
+            DebugLog.log(TAG, "probe $host: could not open socket", e)
             return@withContext null
         }
         socket.use { s ->
-            val boardInfo = exchange(s, address, MlProtocol.CMD_GET_BOARD_INFO, MlProtocol.MAX_COMMAND_REPLY)
-                ?.let { (buf, n) -> MlProtocol.parseBoardInfo(buf, n) }
+            val raw = exchange(s, address, MlProtocol.CMD_GET_BOARD_INFO, MlProtocol.MAX_COMMAND_REPLY)
+            val boardInfo = raw?.let { (buf, n) -> MlProtocol.parseBoardInfo(buf, n) }
+            DebugLog.log(TAG, "probe $host: board info reply=${raw?.second ?: "none"} bytes, parsed=${boardInfo != null}${boardInfo?.let { ": " + it.take(200) } ?: ""}")
             if (boardInfo != null) return@withContext fromBoardInfo(host, boardInfo)
             val version = exchange(s, address, MlProtocol.CMD_GET_VERSION, 0x400)
                 ?.let { (buf, n) -> MlProtocol.replyInt(buf, n) }
-                ?: return@withContext null
+            DebugLog.log(TAG, "probe $host: version reply=${version ?: "none"}")
+            version ?: return@withContext null
             DeviceInfo(host = host, protocol = CameraProtocol.ML, firmware = version.toString())
         }
     }
@@ -79,9 +84,11 @@ object MlDiscovery {
             } catch (e: SocketTimeoutException) {
                 return@repeat
             } catch (e: IOException) {
+                DebugLog.log(TAG, "cmd 0x${Integer.toHexString(command)} to ${address.hostAddress}: io error", e)
                 return null
             }
             if (MlProtocol.replyMatches(buffer, packet.length, command)) return buffer to packet.length
+            DebugLog.log(TAG, "cmd 0x${Integer.toHexString(command)}: unexpected ${packet.length} bytes from ${packet.address.hostAddress}: ${DebugLog.hex(buffer, packet.length)}")
         }
         return null
     }

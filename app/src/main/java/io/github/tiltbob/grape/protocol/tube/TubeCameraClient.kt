@@ -6,6 +6,7 @@ import io.github.tiltbob.grape.camera.ConnectionState
 import io.github.tiltbob.grape.camera.DeviceInfo
 import io.github.tiltbob.grape.camera.SocketBinder
 import io.github.tiltbob.grape.camera.VideoFrame
+import io.github.tiltbob.grape.debug.DebugLog
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -92,6 +93,7 @@ class TubeCameraClient(
             connect(host, TubeProtocol.COMMAND_PORT)
         }
         videoSocket = openVideoSocket()
+        DebugLog.log("TubeClient", "connected to ${info.host}: cmd port ${commandSocket?.localPort}, video port ${videoSocket?.localPort}")
         _state.value = ConnectionState.CONNECTED
     }
 
@@ -155,7 +157,11 @@ class TubeCameraClient(
 
     /** Battery request/reply. Also acts as the stream keep-alive. */
     suspend fun readBattery(): BatteryStatus? {
-        val reply = exchange(TubeProtocol.GET_BATTERY) ?: return null
+        val reply = exchange(TubeProtocol.GET_BATTERY)
+        if (reply == null) {
+            DebugLog.log("TubeClient", "battery: no reply from ${info.host}:${TubeProtocol.COMMAND_PORT}")
+            return null
+        }
         val b = TubeProtocol.parseBattery(reply, reply.size) ?: return null
         return BatteryStatus(
             percent = b.percent.coerceIn(0, 100),
@@ -189,6 +195,7 @@ class TubeCameraClient(
     // ---- internals --------------------------------------------------------
 
     private suspend fun restartVideo(video: DatagramSocket) = withContext(Dispatchers.IO) {
+        DebugLog.log("TubeClient", "video STOP+START (frames so far ${assembler.framesCompleted}, dropped ${assembler.framesDropped})")
         runCatching { send(video, TubeProtocol.STOP_VIDEO) }
         delay(100)
         runCatching { send(video, TubeProtocol.START_VIDEO) }
@@ -210,6 +217,7 @@ class TubeCameraClient(
             }
             val frame = assembler.offer(packet.data, packet.length) ?: continue
             val now = System.currentTimeMillis()
+            if (lastFrameAtMs == 0L) DebugLog.log("TubeClient", "first frame: ${frame.length} bytes, angle ${frame.angleDegrees}")
             lastFrameAtMs = now
             _frames.tryEmit(VideoFrame(frame.toByteArray(), frame.angleDegrees, System.nanoTime()))
         }

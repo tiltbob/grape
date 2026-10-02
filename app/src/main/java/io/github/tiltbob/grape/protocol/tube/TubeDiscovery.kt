@@ -3,6 +3,7 @@ package io.github.tiltbob.grape.protocol.tube
 import io.github.tiltbob.grape.camera.CameraProtocol
 import io.github.tiltbob.grape.camera.DeviceInfo
 import io.github.tiltbob.grape.camera.SocketBinder
+import io.github.tiltbob.grape.debug.DebugLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -25,6 +26,7 @@ import java.net.SocketTimeoutException
  *    times a second, so just listening finds it without sending anything.
  */
 object TubeDiscovery {
+    private const val TAG = "TubeDiscovery"
 
     suspend fun probe(
         binder: SocketBinder,
@@ -41,15 +43,20 @@ object TubeDiscovery {
                 soTimeout = 200
             }
         } catch (e: IOException) {
+            DebugLog.log(TAG, "probe: could not open socket", e)
             return@withContext emptyList()
         }
         socket.use { s ->
             val targets = (broadcastAddresses() + "255.255.255.255" + TubeProtocol.KNOWN_HOSTS + extraHosts)
                 .distinct()
                 .mapNotNull { runCatching { InetAddress.getByName(it) }.getOrNull() }
+            DebugLog.log(TAG, "probe: local port ${s.localPort}, interfaces=${interfaceSummary()}, targets=${targets.map { it.hostAddress }}")
             fun sendProbes() {
                 val req = TubeProtocol.GET_BOARD_INFO
-                for (t in targets) runCatching { s.send(DatagramPacket(req, req.size, t, TubeProtocol.COMMAND_PORT)) }
+                for (t in targets) {
+                    runCatching { s.send(DatagramPacket(req, req.size, t, TubeProtocol.COMMAND_PORT)) }
+                        .onFailure { DebugLog.log(TAG, "probe: send to ${t.hostAddress}:${TubeProtocol.COMMAND_PORT} failed", it) }
+                }
             }
             sendProbes()
             val partial = hashMapOf<InetAddress, ByteArrayOutputStream>()
@@ -68,21 +75,34 @@ object TubeDiscovery {
                     }
                     continue
                 } catch (e: IOException) {
+                    DebugLog.log(TAG, "probe: receive failed", e)
                     break
                 }
                 val host = packet.address.hostAddress ?: continue
+                DebugLog.log(TAG, "probe: ${packet.length} bytes from $host:${packet.port}: ${DebugLog.hex(buffer, packet.length)}")
                 if (host in found) continue
                 val acc = partial.getOrPut(packet.address) { ByteArrayOutputStream() }
                 acc.write(buffer, 0, packet.length)
                 val bytes = acc.toByteArray()
                 if (TubeProtocol.isBoardInfoComplete(bytes, bytes.size)) {
                     partial.remove(packet.address)
-                    parseBoardInfo(host, bytes.toString(Charsets.UTF_8))?.let { found[host] = it }
+                    val text = bytes.toString(Charsets.UTF_8)
+                    val info = parseBoardInfo(host, text)
+                    DebugLog.log(TAG, "probe: board info from $host parsed=${info != null}: ${text.take(300)}")
+                    info?.let { found[host] = it }
                 }
             }
+            for ((addr, acc) in partial) DebugLog.log(TAG, "probe: incomplete reply from ${addr.hostAddress} (${acc.size()} bytes)")
         }
+        DebugLog.log(TAG, "probe: done, found ${found.keys}")
         found.values.toList()
     }
+
+    private fun interfaceSummary(): String = runCatching {
+        NetworkInterface.getNetworkInterfaces().toList()
+            .filter { it.isUp && !it.isLoopback }
+            .joinToString("; ") { ni -> ni.name + "=" + ni.interfaceAddresses.joinToString(",") { "${it.address.hostAddress}/${it.networkPrefixLength}(bc ${it.broadcast?.hostAddress})" } }
+    }.getOrElse { "error: ${it.message}" }
 
     suspend fun listenForBeacons(
         binder: SocketBinder,
@@ -97,8 +117,11 @@ object TubeDiscovery {
                 soTimeout = 200
             }
         } catch (e: IOException) {
+            DebugLog.log(TAG, "beacon: could not bind port ${TubeProtocol.BEACON_PORT}", e)
             return@withContext emptyList()
         }
+        DebugLog.log(TAG, "beacon: listening on port ${TubeProtocol.BEACON_PORT}")
+        var datagrams = 0
         socket.use { s ->
             val buffer = ByteArray(TubeProtocol.MAX_DATAGRAM)
             val packet = DatagramPacket(buffer, buffer.size)
@@ -110,9 +133,12 @@ object TubeDiscovery {
                 } catch (e: SocketTimeoutException) {
                     continue
                 } catch (e: IOException) {
+                    DebugLog.log(TAG, "beacon: receive failed", e)
                     break
                 }
+                datagrams++
                 val text = String(buffer, 0, packet.length, Charsets.UTF_8)
+                if (datagrams <= 3) DebugLog.log(TAG, "beacon: from ${packet.address.hostAddress}: ${text.take(300)}")
                 val json = runCatching { JSONObject(text) }.getOrNull() ?: continue
                 val reported = json.optString("ipaddr")
                 val host = if (reported.isNotBlank()) reported else packet.address.hostAddress
@@ -126,6 +152,7 @@ object TubeDiscovery {
                 )
             }
         }
+        DebugLog.log(TAG, "beacon: done, $datagrams datagrams, found ${found.keys}")
         found.values.toList()
     }
 
