@@ -10,6 +10,30 @@ The scope is a Wi-Fi access point without internet. Android keeps the phone's de
 route on mobile data, so every socket in this app is bound to the scope's `Network`
 (see `NetworkLink`). Nothing is ever sent to any address other than the scope's.
 
+## Finding and joining a scope (pairing)
+
+The vendor app never asks the user to pick a Wi-Fi network. It finds the scope over the
+air and joins its access point itself:
+
+* **Bluetooth LE.** The scope advertises with its Wi-Fi SSID as the device name
+  (`bebird-…`, or `xlife-…` for the re-badged units). A plain BLE scan
+  (`SCAN_MODE_LOW_LATENCY`, no filters) for about 8 s is enough; nothing is connected over
+  GATT. The access point's BSSID is the BLE address with its **last byte minus two**
+  (saturating at `00`), which lets the app target that exact AP.
+* **Wi-Fi scan results.** `WifiManager.getScanResults()` filtered by the same name
+  prefixes gives the BSSID and the security capabilities directly.
+* **Wi-Fi Direct** (`WifiP2pManager.discoverPeers`, names starting with `bebird`) is a
+  third path the vendor app tries on some phones. Not needed; the two above suffice.
+
+Joining (Android 10+): `WifiNetworkSpecifier` with the SSID and BSSID, wrapped in a
+`NetworkRequest` for `TRANSPORT_WIFI` without `NET_CAPABILITY_INTERNET`, passed to
+`ConnectivityManager.requestNetwork`. Android connects without showing the network list
+(a one-time approval that it remembers), and the resulting `Network` is the one to bind
+sockets to. Nearly all scopes are open access points. The few WPA models (W3, E3, SE,
+Elite14, Elite14W, Max22, recognised from the model token in the SSID, or from the scan
+capabilities) use the fixed passphrase `12345678`, which the scope also broadcasts in its
+58099 beacon. On Android 8/9 the vendor app adds a `WifiConfiguration` and enables it.
+
 ## Which protocol does my scope speak?
 
 | Generation | Vendor name | Typical models | Address | Discovery |

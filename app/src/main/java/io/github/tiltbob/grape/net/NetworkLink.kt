@@ -1,20 +1,24 @@
 package io.github.tiltbob.grape.net
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.LinkProperties
+import android.net.MacAddress
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.NetworkSpecifier
+import android.net.wifi.WifiConfiguration
+import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
 import android.os.PatternMatcher
 import androidx.annotation.RequiresApi
+import io.github.tiltbob.grape.camera.SocketBinder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import io.github.tiltbob.grape.camera.SocketBinder
 import java.net.Inet4Address
 import java.net.InetAddress
 
@@ -23,16 +27,18 @@ import java.net.InetAddress
  *
  * The scope's access point has no internet, so Android keeps routing the phone's traffic
  * over mobile data. Rather than binding the whole process, every socket the app opens is
- * bound to this network through [binder]. Two ways to obtain it:
- *  - [requestWifi]: whatever Wi-Fi the user already joined from system settings
- *  - [requestWifiBySsidPrefix]: Android 10+ picker limited to networks whose name starts
- *    with a prefix; the connection then exists only for this app.
+ * bound to this network through [binder]. Ways to obtain it:
+ *  - [connectTo]: join a specific scope found by [NearbyScanner] (what the vendor app's
+ *    auto-connect does); on Android 10+ the connection exists only for this app;
+ *  - [requestWifiBySsidPrefix]: Android 10+ picker limited to networks with a name prefix;
+ *  - [requestWifi]: whatever Wi-Fi the user already joined from system settings.
  */
 class NetworkLink(context: Context) {
 
     enum class Status { NONE, REQUESTING, AVAILABLE, UNAVAILABLE, LOST }
 
-    private val cm = context.getSystemService(ConnectivityManager::class.java)
+    private val appContext = context.applicationContext
+    private val cm = appContext.getSystemService(ConnectivityManager::class.java)
     private var callback: ConnectivityManager.NetworkCallback? = null
 
     private val _network = MutableStateFlow<Network?>(null)
@@ -41,18 +47,94 @@ class NetworkLink(context: Context) {
     private val _status = MutableStateFlow(Status.NONE)
     val status: StateFlow<Status> = _status.asStateFlow()
 
-    fun requestWifi() = request(null)
+    /** The SSID the current request targets, for display; null for a generic Wi-Fi request. */
+    var targetSsid: String? = null
+        private set
+
+    /** Network id of a legacy (pre-Android 10) configuration we added, to clean up later. */
+    private var legacyNetworkId = -1
+
+    fun requestWifi() {
+        targetSsid = null
+        request(null)
+    }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     fun requestWifiBySsidPrefix(prefix: String) {
+        targetSsid = null
         val specifier = WifiNetworkSpecifier.Builder()
             .setSsidPattern(PatternMatcher(prefix, PatternMatcher.PATTERN_PREFIX))
             .build()
         request(specifier)
     }
 
+    /**
+     * Join the given scope's Wi-Fi. On Android 10+ this uses a [WifiNetworkSpecifier] with the
+     * SSID and, when known, the BSSID, so the system connects without the user picking a
+     * network (after a one-time approval that Android remembers). Older versions fall back to
+     * a saved Wi-Fi configuration.
+     */
+    fun connectTo(camera: NearbyCamera) {
+        targetSsid = camera.ssid
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            request(specifierFor(camera))
+        } else {
+            connectLegacy(camera)
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun specifierFor(camera: NearbyCamera): WifiNetworkSpecifier {
+        val b = WifiNetworkSpecifier.Builder().setSsid(camera.ssid)
+        camera.bssid?.let { mac -> runCatching { MacAddress.fromString(mac) }.getOrNull()?.let { b.setBssid(it) } }
+        when (camera.security) {
+            CameraWifi.Security.WPA2 -> b.setWpa2Passphrase(CameraWifi.DEFAULT_PASSPHRASE)
+            CameraWifi.Security.WPA3 -> b.setWpa3Passphrase(CameraWifi.DEFAULT_PASSPHRASE)
+            CameraWifi.Security.OPEN -> Unit
+        }
+        return b.build()
+    }
+
+    /**
+     * Android 8/9: add (or reuse) a Wi-Fi configuration, enable it, then wait for the network.
+     * Reading saved networks needs location permission there; without it we just add a new one.
+     */
+    @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission")
+    private fun connectLegacy(camera: NearbyCamera) {
+        val wm = appContext.getSystemService(WifiManager::class.java) ?: run {
+            _status.value = Status.UNAVAILABLE
+            return
+        }
+        val quoted = "\"" + camera.ssid + "\""
+        val existing = runCatching { wm.configuredNetworks }.getOrNull()
+            ?.firstOrNull { it.SSID == quoted }
+        val id = existing?.networkId ?: run {
+            val conf = WifiConfiguration().apply {
+                SSID = quoted
+                camera.bssid?.let { BSSID = it.lowercase() }
+                priority = 40
+                allowedKeyManagement.clear()
+                if (camera.security == CameraWifi.Security.OPEN) {
+                    allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
+                } else {
+                    allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK)
+                    preSharedKey = "\"" + CameraWifi.DEFAULT_PASSPHRASE + "\""
+                }
+            }
+            wm.addNetwork(conf).also { legacyNetworkId = it }
+        }
+        if (id == -1) {
+            _status.value = Status.UNAVAILABLE
+            return
+        }
+        wm.enableNetwork(id, true)
+        wm.reconnect()
+        request(null)
+    }
+
     private fun request(specifier: NetworkSpecifier?) {
-        release()
+        release(keepTarget = true)
         val builder = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
             .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -84,11 +166,12 @@ class NetworkLink(context: Context) {
         }
     }
 
-    fun release() {
+    fun release(keepTarget: Boolean = false) {
         callback?.let { runCatching { cm.unregisterNetworkCallback(it) } }
         callback = null
         _network.value = null
         _status.value = Status.NONE
+        if (!keepTarget) targetSsid = null
     }
 
     /** Pins sockets to the linked network; a no-op when nothing is linked. */

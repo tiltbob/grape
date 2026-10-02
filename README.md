@@ -25,15 +25,21 @@ against hardware from this environment; reports and packet captures are welcome.
 
 ## Using it
 
-1. Switch the scope on and join its Wi-Fi from Android settings (or use **Pick camera
-   Wi-Fi** on Android 10+, which lets you choose a network whose name starts with a prefix
-   and keeps the connection private to this app).
-2. Tap **Link current Wi-Fi** so the app pins its sockets to that network (Android would
-   otherwise route traffic over mobile data because the scope has no internet).
-3. Tap **Scan**. Found cameras are listed; tap one to view. You can also type the scope's
-   address directly.
+1. Switch the scope on and tap **Find nearby**. The app listens for the scope over
+   Bluetooth LE and in the Wi-Fi scan results (Android asks for the nearby-devices /
+   location permissions this needs; nothing leaves the phone). Scopes appear in a list.
+2. Tap a scope. The app joins its Wi-Fi itself (on Android 10+ the connection is private to
+   the app and Android remembers your one-time approval, so the next time it is automatic),
+   finds the camera on that network and opens the live view. A scope you used before is
+   rejoined without a tap when it shows up again.
+3. If you prefer, join the scope's Wi-Fi from system settings and tap **Link current
+   Wi-Fi**, or use **Pick camera Wi-Fi** (Android 10+). Then **Scan**, or type the scope's
+   address.
 4. In the viewer: the slider sets the tip light, **Snapshot** writes a JPEG to
    `Pictures/Grape`, and **Auto-rotate** toggles compensation of the scope's roll angle.
+
+The link step matters because the scope has no internet: without pinning its sockets to
+that Wi-Fi network Android would route the app's traffic over mobile data.
 
 ## Building
 
@@ -52,7 +58,8 @@ app/src/main/java/io/github/tiltbob/grape/
   protocol/tube/ tube protocol: codecs, frame reassembly, client, discovery
   protocol/ml/   ML protocol: codecs, UDP reassembly, TCP parser, client, discovery
   discovery/     runs all discoveries concurrently
-  net/           NetworkLink: obtains and pins the scope's Wi-Fi Network
+  net/           NetworkLink (joins and pins the scope's Wi-Fi), NearbyScanner (BLE + Wi-Fi
+                 scan), CameraWifi (naming / BSSID / security rules)
   ui/            connect screen, viewer, CameraView, snapshot saving
 docs/PROTOCOL.md protocol notes
 ```
