@@ -8,7 +8,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import org.json.JSONObject
 import java.io.IOException
 import java.net.DatagramPacket
@@ -30,6 +32,7 @@ object MlDiscovery {
     }
 
     suspend fun probeHost(binder: SocketBinder, host: String): DeviceInfo? = withContext(Dispatchers.IO) {
+        val job = coroutineContext[Job]
         val address = runCatching { InetAddress.getByName(host) }.getOrNull() ?: return@withContext null
         val socket = try {
             DatagramSocket(null).apply {
@@ -42,11 +45,12 @@ object MlDiscovery {
             return@withContext null
         }
         socket.use { s ->
-            val raw = exchange(s, address, MlProtocol.CMD_GET_BOARD_INFO, MlProtocol.MAX_COMMAND_REPLY)
+            val raw = exchange(s, address, MlProtocol.CMD_GET_BOARD_INFO, MlProtocol.MAX_COMMAND_REPLY, job)
             val boardInfo = raw?.let { (buf, n) -> MlProtocol.parseBoardInfo(buf, n) }
             DebugLog.log(TAG, "probe $host: board info reply=${raw?.second ?: "none"} bytes, parsed=${boardInfo != null}${boardInfo?.let { ": " + it.take(200) } ?: ""}")
             if (boardInfo != null) return@withContext fromBoardInfo(host, boardInfo)
-            val version = exchange(s, address, MlProtocol.CMD_GET_VERSION, 0x400)
+            if (job?.isActive == false) return@withContext null
+            val version = exchange(s, address, MlProtocol.CMD_GET_VERSION, 0x400, job)
                 ?.let { (buf, n) -> MlProtocol.replyInt(buf, n) }
             DebugLog.log(TAG, "probe $host: version reply=${version ?: "none"}")
             version ?: return@withContext null
@@ -71,11 +75,13 @@ object MlDiscovery {
         address: InetAddress,
         command: Int,
         replySize: Int,
+        job: Job?,
         attempts: Int = 3,
     ): Pair<ByteArray, Int>? {
         val buffer = ByteArray(replySize)
         val packet = DatagramPacket(buffer, buffer.size)
         repeat(attempts) { attempt ->
+            if (job?.isActive == false) return null
             val request = MlProtocol.request(command, attempt + 1)
             try {
                 socket.send(DatagramPacket(request, request.size, address, MlProtocol.COMMAND_PORT))

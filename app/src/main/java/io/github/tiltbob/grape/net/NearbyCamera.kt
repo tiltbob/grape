@@ -13,7 +13,13 @@ data class NearbyCamera(
     val seenByWifi: Boolean = false,
     /** Signal strength in dBm from whichever radio saw it last. */
     val rssi: Int? = null,
+    /** Joined before (see [KnownScope]); listed even when no radio hears it right now. */
+    val remembered: Boolean = false,
+    val lastJoinedMs: Long? = null,
 ) {
+    /** Heard by a radio during this scan, as opposed to only remembered. */
+    val heard: Boolean get() = seenByBluetooth || seenByWifi
+
     val security: CameraWifi.Security get() = CameraWifi.securityFor(ssid, capabilities)
 
     fun merge(other: NearbyCamera): NearbyCamera = copy(
@@ -23,5 +29,7 @@ data class NearbyCamera(
         seenByBluetooth = seenByBluetooth || other.seenByBluetooth,
         seenByWifi = seenByWifi || other.seenByWifi,
         rssi = other.rssi ?: rssi,
+        remembered = remembered || other.remembered,
+        lastJoinedMs = other.lastJoinedMs ?: lastJoinedMs,
     )
 }

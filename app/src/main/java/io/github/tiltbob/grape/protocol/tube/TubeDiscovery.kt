@@ -5,6 +5,7 @@ import io.github.tiltbob.grape.camera.DeviceInfo
 import io.github.tiltbob.grape.camera.SocketBinder
 import io.github.tiltbob.grape.debug.DebugLog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -28,10 +29,16 @@ import java.net.SocketTimeoutException
 object TubeDiscovery {
     private const val TAG = "TubeDiscovery"
 
+    /**
+     * Broadcast a board-info request (and unicast it to the usual addresses plus
+     * [extraHosts]) and collect the replies. With [stopAtFirst] the first parsed reply ends
+     * the wait: a scope's own network only ever has the one camera on it.
+     */
     suspend fun probe(
         binder: SocketBinder,
         extraHosts: List<String>,
         timeoutMs: Long,
+        stopAtFirst: Boolean = false,
     ): List<DeviceInfo> = withContext(Dispatchers.IO) {
         val found = linkedMapOf<String, DeviceInfo>()
         val socket = try {
@@ -64,7 +71,7 @@ object TubeDiscovery {
             val packet = DatagramPacket(buffer, buffer.size)
             val start = System.currentTimeMillis()
             var resent = false
-            while (System.currentTimeMillis() - start < timeoutMs) {
+            while (isActive && System.currentTimeMillis() - start < timeoutMs) {
                 try {
                     packet.length = buffer.size
                     s.receive(packet)
@@ -90,6 +97,7 @@ object TubeDiscovery {
                     val info = parseBoardInfo(host, text)
                     DebugLog.log(TAG, "probe: board info from $host parsed=${info != null}: $text")
                     info?.let { found[host] = it }
+                    if (stopAtFirst && found.isNotEmpty()) break
                 }
             }
             for ((addr, acc) in partial) DebugLog.log(TAG, "probe: incomplete reply from ${addr.hostAddress} (${acc.size()} bytes)")
@@ -126,7 +134,7 @@ object TubeDiscovery {
             val buffer = ByteArray(TubeProtocol.MAX_DATAGRAM)
             val packet = DatagramPacket(buffer, buffer.size)
             val start = System.currentTimeMillis()
-            while (System.currentTimeMillis() - start < timeoutMs) {
+            while (isActive && System.currentTimeMillis() - start < timeoutMs) {
                 try {
                     packet.length = buffer.size
                     s.receive(packet)

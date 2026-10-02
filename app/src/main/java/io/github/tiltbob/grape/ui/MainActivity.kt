@@ -13,6 +13,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.tiltbob.grape.GrapeApp
 import io.github.tiltbob.grape.R
 import io.github.tiltbob.grape.camera.DeviceInfo
@@ -21,6 +22,8 @@ import io.github.tiltbob.grape.debug.DebugLog
 import io.github.tiltbob.grape.debug.DebugReport
 import io.github.tiltbob.grape.discovery.CameraDiscovery
 import io.github.tiltbob.grape.net.CameraWifi
+import io.github.tiltbob.grape.net.KnownScope
+import io.github.tiltbob.grape.net.KnownScopes
 import io.github.tiltbob.grape.net.NearbyCamera
 import io.github.tiltbob.grape.net.NearbyScanner
 import io.github.tiltbob.grape.net.NetworkLink
@@ -37,8 +40,9 @@ class MainActivity : AppCompatActivity() {
     private val app: GrapeApp get() = application as GrapeApp
     private val link: NetworkLink get() = app.link
     private val scanner: NearbyScanner get() = app.scanner
+    private val known: KnownScopes get() = app.known
 
-    private val nearbyAdapter = NearbyListAdapter(::connectAndOpen)
+    private val nearbyAdapter = NearbyListAdapter(::connectAndOpen, ::confirmForget)
     private var findJob: Job? = null
 
     /** True between asking Android to join a scope's Wi-Fi and opening the viewer. */
@@ -64,7 +68,6 @@ class MainActivity : AppCompatActivity() {
 
         binding.rvNearby.layoutManager = LinearLayoutManager(this)
         binding.rvNearby.adapter = nearbyAdapter
-        nearbyAdapter.lastUsedSsid = app.lastCameraSsid
 
         binding.btnFindNearby.setOnClickListener {
             autoJoinDone = false
@@ -90,6 +93,7 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { link.status.collect { onLinkStatus(it) } }
                 launch { scanner.cameras.collect { onNearby(it) } }
+                launch { known.scopes.collect { refreshList() } }
                 launch { scanner.scanning.collect { onScanningChanged(it) } }
                 launch {
                     scanner.notes.collect { notes ->
@@ -141,25 +145,38 @@ class MainActivity : AppCompatActivity() {
         binding.progressNearby.isVisible = scanning || pendingJoin
         binding.btnFindNearby.isEnabled = !scanning && !pendingJoin
         if (pendingJoin) return
-        val n = scanner.cameras.value.size
-        binding.tvNearbyStatus.text = when {
-            scanning -> getString(R.string.nearby_scanning)
-            n == 0 -> getString(R.string.nearby_none)
-            else -> getString(R.string.nearby_found, n)
+        binding.tvNearbyStatus.text = if (scanning) getString(R.string.nearby_scanning) else idleStatus()
+    }
+
+    /** What to say under the list when nothing is in progress. */
+    private fun idleStatus(): String {
+        val heard = scanner.cameras.value.size
+        val remembered = known.scopes.value.size
+        return when {
+            heard > 0 -> getString(R.string.nearby_found, heard)
+            remembered > 0 -> getString(R.string.nearby_remembered, remembered)
+            else -> getString(R.string.nearby_none)
         }
     }
 
+    /** Heard scopes first, completed from memory, then remembered ones nobody hears yet. */
+    private fun refreshList() {
+        nearbyAdapter.submit(KnownScope.listing(scanner.cameras.value, known.scopes.value))
+        if (!pendingJoin && !scanner.scanning.value) binding.tvNearbyStatus.text = idleStatus()
+    }
+
     private fun onNearby(list: List<NearbyCamera>) {
-        nearbyAdapter.submit(list)
+        refreshList()
         if (!pendingJoin && list.isNotEmpty()) {
             binding.tvNearbyStatus.text = getString(R.string.nearby_found, list.size)
         }
         // The scope we used last time is switched on again: rejoin it without a tap.
-        val last = app.lastCameraSsid ?: return
+        val last = known.lastUsed ?: return
         if (autoJoinDone || pendingJoin || link.status.value == NetworkLink.Status.AVAILABLE) return
-        val match = list.firstOrNull { it.ssid.equals(last, ignoreCase = true) } ?: return
+        val match = list.firstOrNull { it.ssid.equals(last.ssid, ignoreCase = true) } ?: return
         autoJoinDone = true
-        connectAndOpen(match)
+        DebugLog.log("Main", "heard the last used scope ${match.ssid}: rejoining")
+        connectAndOpen(last.complete(match))
     }
 
     /** Join the scope's Wi-Fi; [onLinkStatus] continues once Android reports the network. */
@@ -167,12 +184,20 @@ class MainActivity : AppCompatActivity() {
         scanner.stop()
         pendingJoin = true
         pendingSsid = camera.ssid
-        app.lastCameraSsid = camera.ssid
-        nearbyAdapter.lastUsedSsid = camera.ssid
+        known.remember(camera)
         binding.tvNearbyStatus.text = getString(R.string.nearby_joining, camera.ssid)
         binding.progressNearby.isVisible = true
         binding.btnFindNearby.isEnabled = false
         link.connectTo(camera)
+    }
+
+    private fun confirmForget(camera: NearbyCamera) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.forget_title, camera.ssid))
+            .setMessage(R.string.forget_message)
+            .setNegativeButton(R.string.btn_cancel, null)
+            .setPositiveButton(R.string.btn_forget) { _, _ -> known.forget(camera.ssid) }
+            .show()
     }
 
     /** Fallback when the radios cannot hear the scope: let Android list matching networks. */
@@ -194,7 +219,7 @@ class MainActivity : AppCompatActivity() {
         if (!pendingJoin) return
         val ssid = pendingSsid ?: link.targetSsid ?: getString(R.string.the_scope_wifi)
         when (status) {
-            NetworkLink.Status.AVAILABLE -> findCameraOnJoinedNetwork(ssid)
+            NetworkLink.Status.AVAILABLE -> findCameraOnJoinedNetwork(ssid, rememberAs = pendingSsid ?: link.targetSsid)
             NetworkLink.Status.UNAVAILABLE, NetworkLink.Status.LOST -> {
                 finishJoin()
                 binding.tvNearbyStatus.text = if (pendingSsid != null) {
@@ -207,17 +232,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** The joined network is the scope's own: ask it for the camera and open the viewer. */
-    private fun findCameraOnJoinedNetwork(ssid: String) {
+    /**
+     * The joined network is the scope's own: ask it for the camera and open the viewer.
+     * [rememberAs] is the SSID to file the camera's details under, when we know it.
+     */
+    private fun findCameraOnJoinedNetwork(ssid: String, rememberAs: String?) {
         findJob?.cancel()
         findJob = lifecycleScope.launch {
             binding.tvNearbyStatus.text = getString(R.string.nearby_looking, ssid)
-            DebugLog.log("Main", "joined $ssid: link=${link.status.value} local=${link.localAddress()} candidates=${link.candidateHosts()}")
+            val remembered = known.forSsid(rememberAs)?.device
+            // The camera's address from last time goes first in line, in case the network's
+            // DHCP server or gateway is not the camera itself.
+            val hosts = (listOfNotNull(remembered?.host) + link.candidateHosts()).distinct()
+            DebugLog.log("Main", "joined $ssid: link=${link.status.value} local=${link.localAddress()} candidates=$hosts remembered=${remembered?.let { "${it.host}/${it.protocol}/${it.model}" }}")
             val wifi = applicationContext.getSystemService(WifiManager::class.java)
             // Without this lock many phones' Wi-Fi drivers drop broadcast datagrams such as the beacon.
             val lock = wifi?.createMulticastLock("eardigger-scan")?.apply { setReferenceCounted(false); acquire() }
             val found = try {
-                CameraDiscovery.scan(link.binder(), link.candidateHosts())
+                CameraDiscovery.scan(link.binder(), hosts)
             } catch (e: Exception) {
                 DebugLog.log("Main", "scan failed", e)
                 emptyList()
@@ -225,8 +257,13 @@ class MainActivity : AppCompatActivity() {
                 runCatching { lock?.release() }
             }
             finishJoin()
-            val first = found.firstOrNull()
+            var first = found.firstOrNull()
             if (first != null) {
+                // A beacon-only answer says less than the board info we kept from last time.
+                if (first.rawInfo == null && remembered?.rawInfo != null && remembered.host == first.host) {
+                    first = remembered
+                }
+                if (rememberAs != null) known.learn(rememberAs, first)
                 binding.tvNearbyStatus.text = getString(R.string.nearby_found, 1)
                 openCamera(first)
             } else {

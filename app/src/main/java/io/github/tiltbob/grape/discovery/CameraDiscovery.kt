@@ -5,10 +5,16 @@ import io.github.tiltbob.grape.camera.SocketBinder
 import io.github.tiltbob.grape.debug.DebugLog
 import io.github.tiltbob.grape.protocol.ml.MlDiscovery
 import io.github.tiltbob.grape.protocol.tube.TubeDiscovery
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.selects.select
 
-/** Runs every protocol's discovery concurrently and merges the results by host. */
+/**
+ * Runs every protocol's discovery concurrently. The scope's own network has exactly one
+ * camera on it, so the first discovery to find anything ends the scan; the rest are
+ * cancelled rather than waited out.
+ */
 object CameraDiscovery {
     suspend fun scan(
         binder: SocketBinder,
@@ -17,15 +23,21 @@ object CameraDiscovery {
     ): List<DeviceInfo> = coroutineScope {
         val started = System.currentTimeMillis()
         DebugLog.log("Discovery", "scan: extraHosts=$extraHosts timeout=${timeoutMs}ms")
-        val probe = async { TubeDiscovery.probe(binder, extraHosts, timeoutMs) }
-        val beacons = async { TubeDiscovery.listenForBeacons(binder, timeoutMs) }
-        val ml = async { MlDiscovery.probe(binder, extraHosts) }
-        val merged = linkedMapOf<String, DeviceInfo>()
-        // Board-info replies carry more detail than beacons, so they win on conflict.
-        for (d in beacons.await()) merged[d.host] = d
-        for (d in probe.await()) merged[d.host] = d
-        for (d in ml.await()) merged.putIfAbsent(d.host, d)
-        DebugLog.log("Discovery", "scan: ${merged.size} camera(s) after ${System.currentTimeMillis() - started}ms: ${merged.values.map { "${it.host}/${it.protocol}/${it.model}" }}")
-        merged.values.toList()
+        val pending = mutableListOf<Deferred<List<DeviceInfo>>>(
+            async { TubeDiscovery.probe(binder, extraHosts, timeoutMs, stopAtFirst = true) },
+            async { MlDiscovery.probe(binder, extraHosts) },
+            async { TubeDiscovery.listenForBeacons(binder, timeoutMs) },
+        )
+        var result: List<DeviceInfo> = emptyList()
+        while (pending.isNotEmpty() && result.isEmpty()) {
+            val (done, found) = select {
+                for (d in pending) d.onAwait { d to it }
+            }
+            pending.remove(done)
+            result = found
+        }
+        pending.forEach { it.cancel() }
+        DebugLog.log("Discovery", "scan: ${result.size} camera(s) after ${System.currentTimeMillis() - started}ms: ${result.map { "${it.host}/${it.protocol}/${it.model}" }}")
+        result
     }
 }

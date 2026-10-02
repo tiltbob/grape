@@ -37,6 +37,12 @@ class NetworkLink(context: Context) {
 
     private companion object {
         const val TAG = "NetworkLink"
+        /**
+         * Give up on a remembered scope that no radio heard (switched off, out of range)
+         * after this long. A scope that was heard gets no timer: Android reports failure
+         * itself, and a first-time approval dialog must not race a clock.
+         */
+        const val JOIN_TIMEOUT_MS = 30_000
     }
 
     enum class Status { NONE, REQUESTING, AVAILABLE, UNAVAILABLE, LOST }
@@ -78,7 +84,7 @@ class NetworkLink(context: Context) {
         targetSsid = camera.ssid
         DebugLog.log(TAG, "connectTo(ssid=${camera.ssid} bssid=${camera.bssid} security=${camera.security} ble=${camera.bleAddress})")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            request(specifierFor(camera))
+            request(specifierFor(camera), if (camera.heard) 0 else JOIN_TIMEOUT_MS)
         } else {
             connectLegacy(camera)
         }
@@ -134,7 +140,7 @@ class NetworkLink(context: Context) {
         request(null)
     }
 
-    private fun request(specifier: NetworkSpecifier?) {
+    private fun request(specifier: NetworkSpecifier?, timeoutMs: Int = 0) {
         release(keepTarget = true)
         val builder = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
@@ -163,8 +169,8 @@ class NetworkLink(context: Context) {
         callback = cb
         _status.value = Status.REQUESTING
         try {
-            cm.requestNetwork(builder.build(), cb)
-            DebugLog.log(TAG, "requestNetwork sent (specifier=${specifier != null})")
+            if (timeoutMs > 0) cm.requestNetwork(builder.build(), cb, timeoutMs) else cm.requestNetwork(builder.build(), cb)
+            DebugLog.log(TAG, "requestNetwork sent (specifier=${specifier != null}, timeout=${timeoutMs}ms)")
         } catch (e: Exception) {
             DebugLog.log(TAG, "requestNetwork failed", e)
             callback = null

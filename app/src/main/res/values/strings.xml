@@ -18,7 +18,13 @@
     <string name="nearby_join_failed_generic">Could not join the scope\'s Wi-Fi. Make sure it is switched on and try again.</string>
     <string name="btn_pick_wifi">Can\'t see it? Pick its Wi-Fi</string>
     <string name="the_scope_wifi">the scope\'s Wi-Fi</string>
-    <string name="nearby_last_used">last used</string>
+    <string name="nearby_remembered">%1$d remembered scope(s). Tap one to connect, or Find nearby to listen for others.</string>
+    <string name="nearby_remembered_tag">remembered, not heard yet</string>
+    <string name="nearby_last_used_at">last used %1$s</string>
+    <string name="forget_title">Forget %1$s?</string>
+    <string name="forget_message">It will no longer be listed until you join it again. Android may still remember your approval of its Wi-Fi.</string>
+    <string name="btn_forget">Forget</string>
+    <string name="btn_cancel">Cancel</string>
     <string name="seen_bluetooth">Bluetooth</string>
     <string name="seen_wifi">Wi-Fi</string>
     <string name="security_open">open</string>

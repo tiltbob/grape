@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.util.Log
 import io.github.tiltbob.grape.debug.DebugLog
+import io.github.tiltbob.grape.net.KnownScopes
 import io.github.tiltbob.grape.net.NearbyScanner
 import io.github.tiltbob.grape.net.NetworkLink
 
@@ -21,10 +22,9 @@ class GrapeApp : Application() {
     lateinit var prefs: SharedPreferences
         private set
 
-    /** SSID of the scope we last joined, so it can be rejoined without a tap. */
-    var lastCameraSsid: String?
-        get() = prefs.getString(KEY_LAST_SSID, null)
-        set(value) = prefs.edit().putString(KEY_LAST_SSID, value).apply()
+    /** Scopes joined before, listed before any scan and rejoined without a tap. */
+    lateinit var known: KnownScopes
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -33,9 +33,7 @@ class GrapeApp : Application() {
         link = NetworkLink(this)
         scanner = NearbyScanner(this)
         prefs = getSharedPreferences("grape", Context.MODE_PRIVATE)
-    }
-
-    private companion object {
-        const val KEY_LAST_SSID = "last_camera_ssid"
+        known = KnownScopes(prefs)
+        DebugLog.log("App", "remembered scopes: ${known.scopes.value.map { it.ssid }}")
     }
 }

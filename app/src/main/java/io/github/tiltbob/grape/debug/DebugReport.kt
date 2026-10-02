@@ -14,6 +14,7 @@ import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import io.github.tiltbob.grape.BuildConfig
+import io.github.tiltbob.grape.GrapeApp
 import io.github.tiltbob.grape.net.NetworkLink
 import java.io.File
 import java.text.SimpleDateFormat
@@ -45,6 +46,13 @@ object DebugReport {
         sb.appendLine()
         sb.appendLine("network link: status=${link.status.value} target=${link.targetSsid} local=${link.localAddress()} candidates=${link.candidateHosts()}")
         sb.appendLine(link.describeNetwork())
+        sb.appendLine()
+        sb.appendLine("remembered scopes:")
+        val known = (context.applicationContext as? GrapeApp)?.known?.scopes?.value.orEmpty()
+        if (known.isEmpty()) sb.appendLine("  none")
+        for (k in known) {
+            sb.appendLine("  ${k.ssid} bssid=${k.bssid} ble=${k.bleAddress} caps=${k.capabilities} camera=${k.device?.let { "${it.host}/${it.protocol}/${it.model}" }} joined=${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(k.lastJoinedMs))}")
+        }
         sb.appendLine()
         sb.appendLine("log (${DebugLog.size()} lines):")
         sb.append(DebugLog.dump())

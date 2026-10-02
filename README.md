@@ -38,6 +38,10 @@ The scope is its own Wi-Fi access point, so there is nothing to configure:
    rejoined without a tap when it shows up again.
 3. If the radios cannot hear it, **Can't see it? Pick its Wi-Fi** opens Android's own picker
    limited to networks named `bebird…`.
+   Scopes you have joined are remembered (name, address, security and what the camera said
+   about itself) and listed as soon as the app opens, so you can tap one before any scan has
+   heard it; the last one used is rejoined by itself when it is heard. Long-press a remembered
+   scope to forget it. The list lives in the app's private storage and never leaves the phone.
 4. In the viewer: the slider sets the tip light, **Snapshot** writes a JPEG to
    `Pictures/EarDigger`, and **Auto-rotate** toggles compensation of the scope's roll angle.
 
